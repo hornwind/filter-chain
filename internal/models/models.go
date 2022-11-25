@@ -16,6 +16,8 @@ type RepositoryInterface interface {
 	CreateOrUpdate(c *CountryResources) error
 	GetCountryResources(country string) (*CountryResources, error)
 	GetCountryTimestamp(country string) (time.Time, error)
+	GetCountryAppliedStatus(country string) (bool, error)
+	SetCountryApplied(country string) error
 	// TODO
 	// Delete(ctx context.Context, c CountryResources) (error)
 }

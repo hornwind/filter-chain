@@ -44,6 +44,11 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 			return fmt.Errorf("could not create %s bucket: %v", c.Country, err)
 		}
 
+		// Apply mark
+		if err = root.Put([]byte("applied"), []byte("false")); err != nil {
+			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Country, err)
+		}
+
 		// Store timestamp
 		timestamp, err := json.Marshal(c.UpdateTimestamp)
 		if err != nil {
@@ -104,6 +109,45 @@ func (c *Storage) GetCountryTimestamp(country string) (time.Time, error) {
 	}
 	log.Debug(fmt.Sprintf("Country %s update time: %v", country, result))
 	return result, err
+}
+
+func (c *Storage) GetCountryAppliedStatus(country string) (bool, error) {
+	var status bool
+	var data []byte
+	err := c.storage.View(func(tx *bolt.Tx) error {
+		data = tx.Bucket([]byte(country)).Get([]byte("applied"))
+		if data == nil {
+			return fmt.Errorf("could not fetch status for country %s", country)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if err = json.Unmarshal(data, &status); err != nil {
+		log.Warn(err)
+	}
+	log.Debug(fmt.Sprintf("Country %s is applied: %v", country, status))
+	return status, nil
+}
+
+func (c *Storage) SetCountryApplied(country string) error {
+	err := c.storage.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(country))
+		if b != nil {
+			if err := b.Put([]byte("applied"), []byte("true")); err != nil {
+				return fmt.Errorf("could not update status for country %s: %v", country, err)
+			} else {
+				return fmt.Errorf("%s bucket does not exist", country)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("update operation for %s bucket failed: %v", country, err)
+	}
+	return nil
 }
 
 func (c *Storage) GetCountryResources(country string) (*models.CountryResources, error) {
