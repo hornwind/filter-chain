@@ -107,6 +107,73 @@ func (c *Storage) GetCountryTimestamp(country string) (time.Time, error) {
 }
 
 func (c *Storage) GetCountryResources(country string) (*models.CountryResources, error) {
-	//pass
-	return nil, nil
+	var (
+		t  []byte
+		a  []byte
+		i4 []byte
+		i6 []byte
+
+		timestamp time.Time
+		asn       []string
+		ipv4      []string
+		ipv6      []string
+	)
+
+	// Fetch data from DB
+	err := c.storage.View(func(tx *bolt.Tx) error {
+		t = tx.Bucket([]byte(country)).Get([]byte("timestamp"))
+		if t == nil {
+			return fmt.Errorf("could not fetch timestamp for country %s", country)
+		}
+
+		a = tx.Bucket([]byte(country)).Get([]byte("asn"))
+		if t == nil {
+			return fmt.Errorf("could not fetch asn for country %s", country)
+		}
+
+		i4 = tx.Bucket([]byte(country)).Get([]byte("ipv4"))
+		if t == nil {
+			return fmt.Errorf("could not fetch ipv4 for country %s", country)
+		}
+
+		i6 = tx.Bucket([]byte(country)).Get([]byte("ipv6"))
+		if t == nil {
+			return fmt.Errorf("could not fetch ipv6 for country %s", country)
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Error("Fetch country data from BD error:", err)
+		return nil, err
+	}
+
+	// Unmarsha data
+	if err = json.Unmarshal(t, &timestamp); err != nil {
+		log.Warn(err)
+		timestamp = time.Now().AddDate(0, 0, -2)
+	}
+	if err = json.Unmarshal(a, &asn); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if err = json.Unmarshal(i4, &ipv4); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if err = json.Unmarshal(i6, &ipv6); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	// Fill result struct
+	cr := &models.CountryResources{
+		Country:         country,
+		UpdateTimestamp: timestamp,
+		Asn:             asn,
+		Ipv4:            ipv4,
+		Ipv6:            ipv6,
+	}
+
+	return cr, nil
 }
