@@ -6,6 +6,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/viper v1.14.0
 	go.etcd.io/bbolt v1.3.6
+	k8s.io/utils v0.0.0-20221108210102-8e77b1f39fe2
 )
 
 require (

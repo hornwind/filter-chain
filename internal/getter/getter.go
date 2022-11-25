@@ -43,6 +43,7 @@ func NewGetter(localCTX context.CancelFunc, targets []string, checkInterval time
 }
 
 func (c *Getter) Run(ctx context.Context) {
+	// TODO add ticker
 	localCTX, cancel := context.WithCancel(ctx)
 	c.fnCancelRunCTX = cancel
 	log.Debug("Getter started")
