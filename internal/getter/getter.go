@@ -17,7 +17,7 @@ type Getter struct {
 	targets        []string
 	fnCancelRunCTX context.CancelFunc
 	checkInterval  time.Duration
-	storage        models.RepositoryInterface
+	storage        models.Repository
 	// countryData models.CountryResources
 }
 
@@ -31,7 +31,7 @@ type RespJson struct {
 	} `json:"data"`
 }
 
-func NewGetter(localCTX context.CancelFunc, targets []string, checkInterval time.Duration, storage models.RepositoryInterface) (*Getter, error) {
+func NewGetter(localCTX context.CancelFunc, targets []string, checkInterval time.Duration, storage models.Repository) (*Getter, error) {
 	getter := &Getter{
 		fnCancelRunCTX: localCTX,
 		checkInterval:  checkInterval,

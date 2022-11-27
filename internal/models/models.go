@@ -12,7 +12,7 @@ type CountryResources struct {
 	Ipv6            []string
 }
 
-type RepositoryInterface interface {
+type Repository interface {
 	CreateOrUpdate(c *CountryResources) error
 	GetCountryResources(country string) (*CountryResources, error)
 	GetCountryTimestamp(country string) (time.Time, error)
@@ -20,4 +20,7 @@ type RepositoryInterface interface {
 	SetCountryApplied(country string) error
 	// TODO
 	// Delete(ctx context.Context, c CountryResources) (error)
+}
+
+type Firewall interface {
 }

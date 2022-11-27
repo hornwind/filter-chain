@@ -17,7 +17,7 @@ type Storage struct {
 	storage bolt.DB
 }
 
-var _ models.RepositoryInterface = (*Storage)(nil)
+var _ models.Repository = (*Storage)(nil)
 
 func NewStorage(path string) (*Storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
