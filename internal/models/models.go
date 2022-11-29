@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-type CountryResources struct {
-	Country         string
+type IpsetResources struct {
+	Name            string
 	UpdateTimestamp time.Time
 	Asn             []string
 	Ipv4            []string
@@ -13,13 +13,13 @@ type CountryResources struct {
 }
 
 type Repository interface {
-	CreateOrUpdate(c *CountryResources) error
-	GetCountryResources(country string) (*CountryResources, error)
-	GetCountryTimestamp(country string) (time.Time, error)
-	GetCountryAppliedStatus(country string) (bool, error)
-	SetCountryApplied(country string) error
+	CreateOrUpdate(c *IpsetResources) error
+	GetIpsetResources(name string) (*IpsetResources, error)
+	GetIpsetTimestamp(name string) (time.Time, error)
+	GetIpsetAppliedStatus(name string) (bool, error)
+	SetIpsetApplied(name string) error
 	// TODO
-	// Delete(ctx context.Context, c CountryResources) (error)
+	// Delete(ctx context.Context, c IpsetResources) (error)
 }
 
 type Firewall interface {

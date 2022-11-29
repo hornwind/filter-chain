@@ -13,7 +13,7 @@ import (
 
 type Storage struct {
 	// mu sync.RWMutex
-	// countryResources models.CountryResources
+	// IpsetResources models.IpsetResources
 	storage bolt.DB
 }
 
@@ -37,16 +37,16 @@ func (s *Storage) Close() {
 	s.storage.Close()
 }
 
-func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
+func (s *Storage) CreateOrUpdate(c *models.IpsetResources) error {
 	err := s.storage.Update(func(tx *bolt.Tx) error {
-		root, err := tx.CreateBucketIfNotExists([]byte(c.Country))
+		root, err := tx.CreateBucketIfNotExists([]byte(c.Name))
 		if err != nil {
-			return fmt.Errorf("could not create %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not create %s bucket: %v", c.Name, err)
 		}
 
 		// Apply mark
 		if err = root.Put([]byte("applied"), []byte("false")); err != nil {
-			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Name, err)
 		}
 
 		// Store timestamp
@@ -55,7 +55,7 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 			return fmt.Errorf("could not marshal timestamp json: %v", err)
 		}
 		if err = root.Put([]byte("timestamp"), []byte(timestamp)); err != nil {
-			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Name, err)
 		}
 
 		// Store asns
@@ -64,7 +64,7 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 			return fmt.Errorf("could not marshal asn json: %v", err)
 		}
 		if err = root.Put([]byte("asn"), []byte(asn)); err != nil {
-			return fmt.Errorf("could not put asns into %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not put asns into %s bucket: %v", c.Name, err)
 		}
 
 		// Store ipv4
@@ -73,7 +73,7 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 			return fmt.Errorf("could not marshal ipv4 json: %v", err)
 		}
 		if err = root.Put([]byte("ipv4"), []byte(ipv4)); err != nil {
-			return fmt.Errorf("could not put ipv4 addresses into %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not put ipv4 addresses into %s bucket: %v", c.Name, err)
 		}
 
 		// Store ipv6
@@ -82,7 +82,7 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 			return fmt.Errorf("could not marshal ipv6 json: %v", err)
 		}
 		if err = root.Put([]byte("ipv6"), []byte(ipv6)); err != nil {
-			return fmt.Errorf("could not put ipv6 addresses into %s bucket: %v", c.Country, err)
+			return fmt.Errorf("could not put ipv6 addresses into %s bucket: %v", c.Name, err)
 		}
 
 		return nil
@@ -90,13 +90,13 @@ func (s *Storage) CreateOrUpdate(c *models.CountryResources) error {
 	return err
 }
 
-func (c *Storage) GetCountryTimestamp(country string) (time.Time, error) {
+func (c *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
 	var data []byte
 	result := time.Now().AddDate(0, 0, -2)
 	err := c.storage.View(func(tx *bolt.Tx) error {
-		data = tx.Bucket([]byte(country)).Get([]byte("timestamp"))
+		data = tx.Bucket([]byte(name)).Get([]byte("timestamp"))
 		if data == nil {
-			return fmt.Errorf("could not fetch timestamp for country %s", country)
+			return fmt.Errorf("could not fetch timestamp for %s", name)
 		}
 		return nil
 	})
@@ -107,17 +107,17 @@ func (c *Storage) GetCountryTimestamp(country string) (time.Time, error) {
 	if err = json.Unmarshal(data, &result); err != nil {
 		log.Warn(err)
 	}
-	log.Debug(fmt.Sprintf("Country %s update time: %v", country, result))
+	log.Debug(fmt.Sprintf("%s update time: %v", name, result))
 	return result, err
 }
 
-func (c *Storage) GetCountryAppliedStatus(country string) (bool, error) {
+func (c *Storage) GetIpsetAppliedStatus(name string) (bool, error) {
 	var status bool
 	var data []byte
 	err := c.storage.View(func(tx *bolt.Tx) error {
-		data = tx.Bucket([]byte(country)).Get([]byte("applied"))
+		data = tx.Bucket([]byte(name)).Get([]byte("applied"))
 		if data == nil {
-			return fmt.Errorf("could not fetch status for country %s", country)
+			return fmt.Errorf("could not fetch status for %s", name)
 		}
 		return nil
 	})
@@ -128,29 +128,29 @@ func (c *Storage) GetCountryAppliedStatus(country string) (bool, error) {
 	if err = json.Unmarshal(data, &status); err != nil {
 		log.Warn(err)
 	}
-	log.Debug(fmt.Sprintf("Country %s is applied: %v", country, status))
+	log.Debug(fmt.Sprintf("%s is applied: %v", name, status))
 	return status, nil
 }
 
-func (c *Storage) SetCountryApplied(country string) error {
+func (c *Storage) SetIpsetApplied(name string) error {
 	err := c.storage.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(country))
+		b := tx.Bucket([]byte(name))
 		if b != nil {
 			if err := b.Put([]byte("applied"), []byte("true")); err != nil {
-				return fmt.Errorf("could not update status for country %s: %v", country, err)
+				return fmt.Errorf("could not update status for %s: %v", name, err)
 			} else {
-				return fmt.Errorf("%s bucket does not exist", country)
+				return fmt.Errorf("%s bucket does not exist", name)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("update operation for %s bucket failed: %v", country, err)
+		return fmt.Errorf("update operation for %s bucket failed: %v", name, err)
 	}
 	return nil
 }
 
-func (c *Storage) GetCountryResources(country string) (*models.CountryResources, error) {
+func (c *Storage) GetIpsetResources(name string) (*models.IpsetResources, error) {
 	var (
 		t  []byte
 		a  []byte
@@ -165,30 +165,30 @@ func (c *Storage) GetCountryResources(country string) (*models.CountryResources,
 
 	// Fetch data from DB
 	err := c.storage.View(func(tx *bolt.Tx) error {
-		t = tx.Bucket([]byte(country)).Get([]byte("timestamp"))
+		t = tx.Bucket([]byte(name)).Get([]byte("timestamp"))
 		if t == nil {
-			return fmt.Errorf("could not fetch timestamp for country %s", country)
+			return fmt.Errorf("could not fetch timestamp for %s", name)
 		}
 
-		a = tx.Bucket([]byte(country)).Get([]byte("asn"))
+		a = tx.Bucket([]byte(name)).Get([]byte("asn"))
 		if t == nil {
-			return fmt.Errorf("could not fetch asn for country %s", country)
+			return fmt.Errorf("could not fetch asn for %s", name)
 		}
 
-		i4 = tx.Bucket([]byte(country)).Get([]byte("ipv4"))
+		i4 = tx.Bucket([]byte(name)).Get([]byte("ipv4"))
 		if t == nil {
-			return fmt.Errorf("could not fetch ipv4 for country %s", country)
+			return fmt.Errorf("could not fetch ipv4 for %s", name)
 		}
 
-		i6 = tx.Bucket([]byte(country)).Get([]byte("ipv6"))
+		i6 = tx.Bucket([]byte(name)).Get([]byte("ipv6"))
 		if t == nil {
-			return fmt.Errorf("could not fetch ipv6 for country %s", country)
+			return fmt.Errorf("could not fetch ipv6 for %s", name)
 		}
 
 		return nil
 	})
 	if err != nil {
-		log.Error("Fetch country data from BD error:", err)
+		log.Error("Fetch name data from BD error:", err)
 		return nil, err
 	}
 
@@ -211,8 +211,8 @@ func (c *Storage) GetCountryResources(country string) (*models.CountryResources,
 	}
 
 	// Fill result struct
-	cr := &models.CountryResources{
-		Country:         country,
+	cr := &models.IpsetResources{
+		Name:            name,
 		UpdateTimestamp: timestamp,
 		Asn:             asn,
 		Ipv4:            ipv4,

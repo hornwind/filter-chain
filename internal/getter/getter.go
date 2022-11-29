@@ -18,7 +18,7 @@ type Getter struct {
 	fnCancelRunCTX context.CancelFunc
 	checkInterval  time.Duration
 	storage        models.Repository
-	// countryData models.CountryResources
+	// countryData models.IpsetResources
 }
 
 type RespJson struct {
@@ -64,7 +64,7 @@ func (c *Getter) updateCountryData(ctx context.Context, countryCode string) erro
 }
 
 func (c *Getter) countryMustUpdate(countryCode string) bool {
-	lastUpdateTime, err := c.storage.GetCountryTimestamp(countryCode)
+	lastUpdateTime, err := c.storage.GetIpsetTimestamp(countryCode)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Something went wrong while getting country last update time: %v", err))
 		return true
@@ -99,8 +99,8 @@ func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) err
 	}
 
 	time := time.Now()
-	cr := &models.CountryResources{
-		Country:         countryCode,
+	cr := &models.IpsetResources{
+		Name:            countryCode,
 		UpdateTimestamp: time,
 		Asn:             respJson.Data.Resources.Asn,
 		Ipv4:            respJson.Data.Resources.Ipv4,
