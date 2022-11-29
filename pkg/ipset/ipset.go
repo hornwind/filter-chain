@@ -25,7 +25,7 @@ type Interface interface {
 	// AddEntry adds a new entry to the named set.  It will ignore error when the entry already exists if ignoreExistErr=true.
 	AddEntry(entry string, set *IPSet, ignoreExistErr bool) error
 	// RestoreSet creates a new set with list of entries.  It will ignore error when the entry already exists if ignoreExistErr=true.
-	RestoreSet(entry []string, set *IPSet, ignoreExistErr bool) error
+	RestoreSet(entries []string, set *IPSet, ignoreExistErr bool) error
 	// DelEntry deletes one entry from the named set
 	DelEntry(entry string, set string) error
 	// Test test if an entry exists in the named set
@@ -197,6 +197,13 @@ func (runner *runner) AddEntry(entry string, set *IPSet, ignoreExistErr bool) er
 // If the -exist option is specified, ipset ignores the error otherwise raised when
 // the same set (setname and create parameters are identical) already exists.
 func (runner *runner) RestoreSet(entries []string, set *IPSet, ignoreExistErr bool) error {
+	// sets some IPSet fields if not present to their default values.
+	set.setIPSetDefaults()
+
+	// Validate ipset before creating
+	if err := set.Validate(); err != nil {
+		return err
+	}
 	ipset := new(strings.Builder)
 	ipset.WriteString(fmt.Sprintln(
 		"create", set.Name, string(set.SetType),
