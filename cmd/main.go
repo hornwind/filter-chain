@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hornwind/filter-chain/internal/applier"
 	"github.com/hornwind/filter-chain/internal/getter"
 	"github.com/hornwind/filter-chain/internal/models/repository/bolt"
 	"github.com/hornwind/filter-chain/pkg/config"
@@ -32,7 +33,7 @@ func main() {
 	}
 	log.Debug(fmt.Sprintf("%v", config))
 
-	storage, err := bolt.NewStorage("/var/lib/filter-chain/data.db")
+	storage, err := bolt.NewStorage("./test-data/data.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,7 +55,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	cg.Run(ctx)
+	go cg.Run(ctx)
+
+	applier, err := applier.NewApplier(stop, config, storage)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	go applier.Run(ctx)
 
 	<-ctx.Done()
 }
