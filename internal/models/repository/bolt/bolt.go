@@ -12,9 +12,7 @@ import (
 )
 
 type Storage struct {
-	// mu sync.RWMutex
-	// IpsetResources models.IpsetResources
-	storage bolt.DB
+	storage *bolt.DB
 }
 
 var _ models.Repository = (*Storage)(nil)
@@ -26,8 +24,7 @@ func NewStorage(path string) (*Storage, error) {
 	}
 
 	s := &Storage{
-		// mu:      sync.RWMutex{},
-		storage: *db,
+		storage: db,
 	}
 
 	return s, err
@@ -45,7 +42,11 @@ func (s *Storage) CreateOrUpdate(c *models.IpsetResources) error {
 		}
 
 		// Apply mark
-		if err = root.Put([]byte("applied"), []byte("false")); err != nil {
+		status, err := json.Marshal(false)
+		if err != nil {
+			log.Warn("Marshal init bool status error: ", err)
+		}
+		if err = root.Put([]byte("applied"), []byte(status)); err != nil {
 			return fmt.Errorf("could not put timestamp into %s bucket: %v", c.Name, err)
 		}
 
@@ -90,32 +91,52 @@ func (s *Storage) CreateOrUpdate(c *models.IpsetResources) error {
 	return err
 }
 
-func (c *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
+func (s *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
 	var data []byte
-	result := time.Now().AddDate(0, 0, -2)
-	err := c.storage.View(func(tx *bolt.Tx) error {
-		data = tx.Bucket([]byte(name)).Get([]byte("timestamp"))
+	var result time.Time
+	faketime := time.Now().AddDate(0, 0, -2)
+
+	log.Debug(fmt.Sprintf("fetch %s from db", name))
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(name))
+		if b == nil {
+			return nil
+		}
+		data = b.Get([]byte("timestamp"))
 		if data == nil {
 			return fmt.Errorf("could not fetch timestamp for %s", name)
 		}
 		return nil
 	})
 	if err != nil {
-		return result, err
+		return faketime, err
 	}
 
-	if err = json.Unmarshal(data, &result); err != nil {
-		log.Warn(err)
+	if data == nil {
+		log.Warn("Timestamp data from db is nil, return faketime")
+		return faketime, nil
+	}
+
+	if data != nil {
+		if err = json.Unmarshal(data, &result); err != nil {
+			log.Warn("Unmarshaled time from db: ", result)
+			log.Warn("Could not unmarshal timestamp from db: ", err)
+			return faketime, err
+		}
 	}
 	log.Debug(fmt.Sprintf("%s update time: %v", name, result))
 	return result, err
 }
 
-func (c *Storage) GetIpsetAppliedStatus(name string) (bool, error) {
+func (s *Storage) GetIpsetAppliedStatus(name string) (bool, error) {
 	var status bool
 	var data []byte
-	err := c.storage.View(func(tx *bolt.Tx) error {
-		data = tx.Bucket([]byte(name)).Get([]byte("applied"))
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(name))
+		if b == nil {
+			return nil
+		}
+		data = b.Get([]byte("applied"))
 		if data == nil {
 			return fmt.Errorf("could not fetch status for %s", name)
 		}
@@ -125,21 +146,33 @@ func (c *Storage) GetIpsetAppliedStatus(name string) (bool, error) {
 		return false, err
 	}
 
-	if err = json.Unmarshal(data, &status); err != nil {
-		log.Warn(err)
+	if data == nil {
+		log.Warn("Ipset status data from db is nil, return false")
+		return false, nil
 	}
+	if data != nil {
+		if err = json.Unmarshal(data, &status); err != nil {
+			log.Warn("Unmarshalled status: ", status)
+			log.Warn("Could not unmarshal status from db: ", err)
+			return false, err
+		}
+	}
+
 	log.Debug(fmt.Sprintf("%s is applied: %v", name, status))
 	return status, nil
 }
 
-func (c *Storage) SetIpsetApplied(name string) error {
-	err := c.storage.Update(func(tx *bolt.Tx) error {
+func (s *Storage) SetIpsetApplied(name string) error {
+	err := s.storage.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(name))
 		if b != nil {
-			if err := b.Put([]byte("applied"), []byte("true")); err != nil {
+			status, err := json.Marshal(true)
+			if err != nil {
+				return err
+			}
+			log.Debug("Change applied status for ipset ", name, " to true")
+			if err := b.Put([]byte("applied"), []byte(status)); err != nil {
 				return fmt.Errorf("could not update status for %s: %v", name, err)
-			} else {
-				return fmt.Errorf("%s bucket does not exist", name)
 			}
 		}
 		return nil

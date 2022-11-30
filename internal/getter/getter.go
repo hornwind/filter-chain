@@ -49,6 +49,7 @@ func (c *Getter) Run(ctx context.Context) {
 	log.Debug("Getter started")
 	_ = localCTX
 	for _, target := range c.targets {
+		// https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
 		go c.updateCountryData(localCTX, target)
 	}
 }
@@ -56,7 +57,10 @@ func (c *Getter) Run(ctx context.Context) {
 func (c *Getter) updateCountryData(ctx context.Context, countryCode string) error {
 	if c.countryMustUpdate(countryCode) {
 		log.Debug(fmt.Sprintf("Update data for country %s", countryCode))
-		c.getRIPECountryData(ctx, countryCode)
+		if err := c.getRIPECountryData(ctx, countryCode); err != nil {
+			log.Error(err)
+			return err
+		}
 		return nil
 	}
 	log.Debug(fmt.Sprintf("Country %s no need to update", countryCode))
@@ -84,7 +88,6 @@ func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) err
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("get data from RIPE with url %s failed", url)
 	}
-	log.Debug(resp.Body)
 
 	var respJson RespJson
 
@@ -106,8 +109,6 @@ func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) err
 		Ipv4:            respJson.Data.Resources.Ipv4,
 		Ipv6:            respJson.Data.Resources.Ipv6,
 	}
-
-	// log.Debug(cr)
 
 	return c.storage.CreateOrUpdate(cr)
 }

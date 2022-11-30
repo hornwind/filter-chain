@@ -5,11 +5,11 @@ import (
 )
 
 type IpsetResources struct {
-	Name            string
-	UpdateTimestamp time.Time
-	Asn             []string
-	Ipv4            []string
-	Ipv6            []string
+	Name            string    `json:"name"`
+	UpdateTimestamp time.Time `json:"timestamp"`
+	Asn             []string  `json:"asn"`
+	Ipv4            []string  `json:"ipv4"`
+	Ipv6            []string  `json:"ipv6"`
 }
 
 type Repository interface {

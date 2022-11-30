@@ -69,8 +69,14 @@ func (a *Applier) Run(ctx context.Context) {
 			log.Debug("Applier ctx:", localCTX.Err())
 			return
 		case <-ticker.C:
-			a.refreshLiveSets()
-			a.reconcile()
+			if err := a.refreshLiveSets(); err != nil {
+				log.Error(err)
+				return
+			}
+			if err := a.reconcile(); err != nil {
+				log.Error(err)
+				return
+			}
 		}
 	}
 
@@ -114,6 +120,14 @@ func (a *Applier) ipsetCreateOrUpdate(name string, entries []string) error {
 			if err := a.set.SwapSets(temp, name); err != nil {
 				return err
 			}
+			// Flush tmp set
+			if err := a.set.FlushSet(newSet.Name); err != nil {
+				return err
+			}
+			// And delete it
+			if err := a.set.DestroySet(newSet.Name); err != nil {
+				return err
+			}
 		} else {
 			// else create it
 			if err := a.set.RestoreSet(entries, newSet, true); err != nil {
@@ -128,8 +142,9 @@ func (a *Applier) reconcile() error {
 	pos := 1
 	var muPos sync.RWMutex
 	type rule struct {
-		name string
-		rule []string
+		bucket string
+		name   string
+		rule   []string
 	}
 	ruleChan := make(chan rule)
 	defer close(ruleChan)
@@ -144,8 +159,9 @@ func (a *Applier) reconcile() error {
 				log.Error("Chain filling goroutime failed: ", err)
 				return
 			}
-			if len(item.name) != 0 {
-				if err := a.storage.SetIpsetApplied(item.name); err != nil {
+			if item.bucket != "" {
+				log.Debug("Set bucket ", item.bucket, " is applied")
+				if err := a.storage.SetIpsetApplied(item.bucket); err != nil {
 					log.Error(fmt.Sprintf("Could not set %s applied: %v", item.name, err))
 				}
 			}
@@ -163,11 +179,10 @@ func (a *Applier) reconcile() error {
 		if err := a.ipsetCreateOrUpdate(name, a.config.AllowNetworkList); err != nil {
 			return err
 		}
-		// rule := fmt.Sprintf(iptMatchSetTemplate, name, "ACCEPT")
-		// rule := []string{"-m", "set", "--match-set", name, "src", "-j", "ACCEPT"}
 		rule := &rule{
-			name: name,
-			rule: []string{"-m", "set", "--match-set", name, "src", "-j", "ACCEPT"},
+			bucket: "",
+			name:   name,
+			rule:   []string{"-m", "set", "--match-set", name, "src", "-j", "ACCEPT"},
 		}
 		ruleChan <- *rule
 	}
@@ -183,15 +198,14 @@ func (a *Applier) reconcile() error {
 			}
 			// create set if not applied
 			if !ok {
-				name := strings.Join([]string{namePrefix, name}, "-")
-				if err := a.ipsetCreateOrUpdate(name, a.config.AllowNetworkList); err != nil {
+				n := strings.Join([]string{namePrefix, name}, "-")
+				if err := a.ipsetCreateOrUpdate(n, a.config.AllowNetworkList); err != nil {
 					return err
 				}
-				// rule := []string{"-m", "set", "--match-set", name, "src", "-j", strings.ToUpper(ruleVerb)}
-				// rule := fmt.Sprintf(iptMatchSetTemplate, name, strings.ToUpper(ruleVerb))
 				rule := &rule{
-					name: name,
-					rule: []string{"-m", "set", "--match-set", name, "src", "-j", strings.ToUpper(ruleVerb)},
+					bucket: name,
+					name:   n,
+					rule:   []string{"-m", "set", "--match-set", n, "src", "-j", strings.ToUpper(ruleVerb)},
 				}
 				ruleChan <- *rule
 			}

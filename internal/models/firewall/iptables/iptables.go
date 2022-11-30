@@ -1,6 +1,7 @@
 package iptables
 
 import (
+	"fmt"
 	"sync"
 
 	iptables "github.com/coreos/go-iptables/iptables"
@@ -16,8 +17,13 @@ type Iptables struct {
 
 var _ models.Firewall = (*Iptables)(nil)
 
-func NewIptables() (*iptables.IPTables, error) {
-	ipt, err := iptables.New()
+func NewIptables() (*Iptables, error) {
+	i, err := iptables.New()
+	log.Debug(i)
+	ipt := &Iptables{
+		mu:       sync.RWMutex{},
+		iptables: *i,
+	}
 	return ipt, err
 }
 
@@ -34,11 +40,7 @@ func (ipt *Iptables) EnsureChain(table, chain, policy string) (bool, error) {
 		}
 	}
 	if err := ipt.iptables.NewChain(table, chain); err != nil {
-		log.Error("Create chain %s in table %s failed: %v", chain, table, err)
-		return false, err
-	}
-	if err := ipt.iptables.ChangePolicy(table, chain, policy); err != nil {
-		log.Error("Change policy %s for chain %s in table %s failed: %v", policy, chain, table, err)
+		log.Error(fmt.Sprintf("Create chain %s in table %s failed: %v", chain, table, err))
 		return false, err
 	}
 	return true, nil
@@ -54,7 +56,7 @@ func (ipt *Iptables) DeleteChain(table, chain string) error {
 	} else {
 		if ok {
 			if err := ipt.iptables.ClearAndDeleteChain(table, chain); err != nil {
-				log.Error("Delete chain %s in table %s failed: %v", chain, table, err)
+				log.Error(fmt.Sprintf("Delete chain %s in table %s failed: %v", chain, table, err))
 				return err
 			}
 		}
@@ -66,6 +68,7 @@ func (ipt *Iptables) DeleteChain(table, chain string) error {
 func (ipt *Iptables) EnsureRule(pos int, table, chain string, rulespec ...string) (bool, error) {
 	ipt.mu.Lock()
 	defer ipt.mu.Unlock()
+	log.Debug("Check iptables rule", rulespec)
 	if ok, err := ipt.iptables.Exists(table, chain, rulespec...); err != nil {
 		log.Error(err)
 		return false, err
@@ -75,7 +78,7 @@ func (ipt *Iptables) EnsureRule(pos int, table, chain string, rulespec ...string
 		}
 	}
 	if err := ipt.iptables.Insert(table, chain, pos, rulespec...); err != nil {
-		log.Error("Insert rule into chain %s in table %s failed: %v", chain, table, err)
+		log.Error(fmt.Sprintf("Insert rule into chain %s in table %s failed: %v", chain, table, err))
 		return false, err
 	}
 	return true, nil
@@ -86,7 +89,7 @@ func (ipt *Iptables) DeleteRule(table, chain string, rulespec ...string) error {
 	ipt.mu.Lock()
 	defer ipt.mu.Unlock()
 	if err := ipt.iptables.DeleteIfExists(table, chain, rulespec...); err != nil {
-		log.Error("Delete rule in chain %s failed: %v", chain, err)
+		log.Error(fmt.Sprintf("Delete rule in chain %s failed: %v", chain, err))
 		return err
 	}
 	return nil
