@@ -95,7 +95,7 @@ func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) err
 
 	err = json.Unmarshal([]byte(jsonDataFromHttp), &respJson)
 	if err != nil {
-		log.Warn(err)
+		log.Warn("Getter response unmarshal to struct err: ", err)
 	}
 
 	time := time.Now()
