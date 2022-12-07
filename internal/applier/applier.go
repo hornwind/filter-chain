@@ -161,7 +161,7 @@ func (a *Applier) reconcile() error {
 			}
 			if item.bucket != "" {
 				log.Debug("Set bucket ", item.bucket, " is applied")
-				if err := a.storage.SetIpsetApplied(item.bucket); err != nil {
+				if err := a.storage.SetBoolKV(item.bucket, "applied", true); err != nil {
 					log.Error(fmt.Sprintf("Could not set %s applied: %v", item.name, err))
 				}
 			}
@@ -188,7 +188,7 @@ func (a *Applier) reconcile() error {
 	}
 
 	countryApplier := func(name, ruleVerb string) error {
-		if ok, err := a.storage.GetIpsetAppliedStatus(name); err != nil {
+		if ok, err := a.storage.GetBoolKV(name, "applied"); err != nil {
 			// if err skip step
 			return err
 		} else {

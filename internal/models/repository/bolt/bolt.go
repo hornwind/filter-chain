@@ -128,62 +128,7 @@ func (s *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
 	return result, err
 }
 
-func (s *Storage) GetIpsetAppliedStatus(name string) (bool, error) {
-	var status bool
-	var data []byte
-	err := s.storage.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
-		if b == nil {
-			return nil
-		}
-		data = b.Get([]byte("applied"))
-		if data == nil {
-			return fmt.Errorf("could not fetch status for %s", name)
-		}
-		return nil
-	})
-	if err != nil {
-		return false, err
-	}
-
-	if data == nil {
-		log.Warn("Ipset status data from db is nil, return false")
-		return false, nil
-	}
-	if data != nil {
-		if err = json.Unmarshal(data, &status); err != nil {
-			log.Warn("Unmarshalled status: ", status)
-			log.Warn("Could not unmarshal status from db: ", err)
-			return false, err
-		}
-	}
-
-	log.Debug(fmt.Sprintf("%s is applied: %v", name, status))
-	return status, nil
-}
-
-func (s *Storage) SetIpsetApplied(name string) error {
-	err := s.storage.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(name))
-		if b != nil {
-			status, err := json.Marshal(true)
-			if err != nil {
-				return err
-			}
-			log.Debug("Change applied status for ipset ", name, " to true")
-			if err := b.Put([]byte("applied"), []byte(status)); err != nil {
-				return fmt.Errorf("could not update status for %s: %v", name, err)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("update operation for %s bucket failed: %v", name, err)
-	}
-	return nil
-}
-
-func (c *Storage) GetIpsetResources(name string) (*models.IpsetResources, error) {
+func (s *Storage) GetIpsetResources(name string) (*models.IpsetResources, error) {
 	var (
 		t  []byte
 		a  []byte
@@ -197,7 +142,7 @@ func (c *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 	)
 
 	// Fetch data from DB
-	err := c.storage.View(func(tx *bolt.Tx) error {
+	err := s.storage.View(func(tx *bolt.Tx) error {
 		t = tx.Bucket([]byte(name)).Get([]byte("timestamp"))
 		if t == nil {
 			return fmt.Errorf("could not fetch timestamp for %s", name)
@@ -253,4 +198,56 @@ func (c *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 	}
 
 	return cr, nil
+}
+
+func (s *Storage) GetBoolKV(bucket, key string) (bool, error) {
+	var status bool
+	var data []byte
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return nil
+		}
+		data = b.Get([]byte(key))
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if data == nil {
+		log.Warn("Received data from db is nil, return false")
+		return false, nil
+	}
+	if data != nil {
+		if err = json.Unmarshal(data, &status); err != nil {
+			log.Warn("Unmarshalled status: ", status)
+			log.Warn("Could not unmarshal status from db: ", err)
+			return false, err
+		}
+	}
+
+	log.Debug(fmt.Sprintf("%s is %v", key, status))
+	return status, nil
+}
+
+func (s *Storage) SetBoolKV(bucket, key string, val bool) error {
+	err := s.storage.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b != nil {
+			status, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			log.Debug("Change ", key, " in bucket ", bucket, " to ", val)
+			if err := b.Put([]byte(key), []byte(status)); err != nil {
+				return fmt.Errorf("could not update %s: %v", key, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("update operation for %s bucket failed: %v", bucket, err)
+	}
+	return nil
 }

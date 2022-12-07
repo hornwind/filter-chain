@@ -16,8 +16,8 @@ type Repository interface {
 	CreateOrUpdate(c *IpsetResources) error
 	GetIpsetResources(name string) (*IpsetResources, error)
 	GetIpsetTimestamp(name string) (time.Time, error)
-	GetIpsetAppliedStatus(name string) (bool, error)
-	SetIpsetApplied(name string) error
+	GetBoolKV(bucket, key string) (bool, error)
+	SetBoolKV(bucket, key string, val bool) error
 	// TODO
 	// Delete(ctx context.Context, c IpsetResources) (error)
 }
