@@ -54,14 +54,13 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	go cg.Run(ctx)
+	cg.Run(ctx)
 
 	applier, err := applier.NewApplier(stop, config, storage)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	go applier.Run(ctx)
+	applier.Run(ctx)
 
 	<-ctx.Done()
 }

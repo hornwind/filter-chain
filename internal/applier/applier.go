@@ -55,31 +55,61 @@ func NewApplier(localCTX context.CancelFunc, config config.Config, storage model
 }
 
 func (a *Applier) Run(ctx context.Context) {
-	ticker := time.NewTicker(reconciliationInterval)
-	defer ticker.Stop()
 	localCTX, cancel := context.WithCancel(ctx)
 	a.fnCancelRunCTX = cancel
+	go a.runApplier(localCTX)
+	go a.runCleanup(localCTX)
+}
+
+func (a *Applier) runApplier(ctx context.Context) {
+	ticker := time.NewTicker(reconciliationInterval)
+	defer ticker.Stop()
 
 	// time.Sleep(15 * time.Second)
 	log.Debug("Applier started")
 
 	for {
 		select {
-		case <-localCTX.Done():
-			log.Debug("Applier ctx:", localCTX.Err())
+		case <-ctx.Done():
+			log.Debug("Applier ctx:", ctx.Err())
 			return
 		case <-ticker.C:
 			if err := a.refreshLiveSets(); err != nil {
-				log.Error(err)
-				return
+				log.Warn(err)
 			}
 			if err := a.reconcile(); err != nil {
-				log.Error(err)
-				return
+				log.Warn(err)
+				a.fnCancelRunCTX()
 			}
 		}
 	}
+}
 
+func (a *Applier) runCleanup(ctx context.Context) {
+	ticker := time.NewTicker(reconciliationInterval)
+	defer ticker.Stop()
+
+	// time.Sleep(15 * time.Second)
+	log.Debug("Cleanup started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug("Cleanup ctx:", ctx.Err())
+			return
+		case <-ticker.C:
+			if err := a.refreshLiveSets(); err != nil {
+				log.Warn(err)
+			}
+			if err := a.markBucketsForDeletion(); err != nil {
+				log.Warn(err)
+			}
+			if err := a.cleanupCountryResources(); err != nil {
+				log.Warn(err)
+				a.fnCancelRunCTX()
+			}
+		}
+	}
 }
 
 func (a *Applier) refreshLiveSets() error {
@@ -90,7 +120,9 @@ func (a *Applier) refreshLiveSets() error {
 	}
 	if len(sets) == 0 {
 		// flush liveSets
+		a.mu.Lock()
 		a.liveSets = make(map[string]interface{}, 1)
+		a.mu.Unlock()
 		return nil
 	}
 	// flush and refill liveSets
@@ -108,6 +140,7 @@ func (a *Applier) ipsetCreateOrUpdate(name string, entries []string) error {
 		newSet := &ipset.IPSet{
 			Name: name,
 		}
+		a.mu.RLock()
 		if _, ok := a.liveSets[name]; ok {
 			// if ipset with name `n` exists
 			temp := strings.Join([]string{name, "temp"}, "-")
@@ -134,6 +167,7 @@ func (a *Applier) ipsetCreateOrUpdate(name string, entries []string) error {
 				return err
 			}
 		}
+		a.mu.RUnlock()
 	}
 	return nil
 }
@@ -143,7 +177,6 @@ func (a *Applier) reconcile() error {
 	var muPos sync.RWMutex
 	type rule struct {
 		bucket string
-		name   string
 		rule   []string
 	}
 	ruleChan := make(chan rule)
@@ -152,17 +185,18 @@ func (a *Applier) reconcile() error {
 	go func(data <-chan rule) {
 		log.Debug("Start iptables filling goroutine loop")
 		for item := range data {
-			// tr := strings.Split(item.rule, " ")
-			// log.Debug(tr)
 			muPos.Lock()
 			if _, err := a.fw.EnsureRule(pos, iptTable, iptChain, item.rule...); err != nil {
-				log.Error("Chain filling goroutime failed: ", err)
+				log.Errorf("Chain filling goroutime failed: %v", err)
 				return
 			}
 			if item.bucket != "" {
 				log.Debug("Set bucket ", item.bucket, " is applied")
+				if err := a.storage.StoreRule(item.bucket, "rule", item.rule); err != nil {
+					log.Errorf("Could not store rule %s in bucket %s", item.rule, item.bucket)
+				}
 				if err := a.storage.SetBoolKV(item.bucket, "applied", true); err != nil {
-					log.Error(fmt.Sprintf("Could not set %s applied: %v", item.name, err))
+					log.Errorf("Could not set %s applied: %v", item.bucket, err)
 				}
 			}
 			pos++
@@ -175,20 +209,19 @@ func (a *Applier) reconcile() error {
 	}
 
 	if len(a.config.AllowNetworkList) != 0 {
-		name := strings.Join([]string{namePrefix, "allow", "networks"}, "-")
-		if err := a.ipsetCreateOrUpdate(name, a.config.AllowNetworkList); err != nil {
+		ipsetName := strings.Join([]string{namePrefix, "allow", "networks"}, "-")
+		if err := a.ipsetCreateOrUpdate(ipsetName, a.config.AllowNetworkList); err != nil {
 			return err
 		}
 		rule := &rule{
 			bucket: "",
-			name:   name,
-			rule:   []string{"-m", "set", "--match-set", name, "src", "-j", "ACCEPT"},
+			rule:   []string{"-m", "set", "--match-set", ipsetName, "src", "-j", "ACCEPT"},
 		}
 		ruleChan <- *rule
 	}
 
-	countryApplier := func(name, ruleVerb string) error {
-		if ok, err := a.storage.GetBoolKV(name, "applied"); err != nil {
+	countryApplier := func(bucket, ruleVerb string) error {
+		if ok, err := a.storage.GetBoolKV(bucket, "applied"); err != nil {
 			// if err skip step
 			return err
 		} else {
@@ -198,14 +231,18 @@ func (a *Applier) reconcile() error {
 			}
 			// create set if not applied
 			if !ok {
-				n := strings.Join([]string{namePrefix, name}, "-")
-				if err := a.ipsetCreateOrUpdate(n, a.config.AllowNetworkList); err != nil {
+				ipsetName := strings.Join([]string{namePrefix, bucket}, "-")
+				if err := a.ipsetCreateOrUpdate(ipsetName, a.config.AllowNetworkList); err != nil {
+					log.Warnf("Could not create ipset: %v", err)
+					return err
+				}
+				if err := a.storage.SetStringKV(bucket, "ipset", ipsetName); err != nil {
+					log.Warnf("Could not store ipset name %s to bucket %s: %v", ipsetName, bucket, err)
 					return err
 				}
 				rule := &rule{
-					bucket: name,
-					name:   n,
-					rule:   []string{"-m", "set", "--match-set", n, "src", "-j", strings.ToUpper(ruleVerb)},
+					bucket: bucket,
+					rule:   []string{"-m", "set", "--match-set", ipsetName, "src", "-j", strings.ToUpper(ruleVerb)},
 				}
 				ruleChan <- *rule
 			}
@@ -231,5 +268,106 @@ func (a *Applier) reconcile() error {
 		}
 	}
 
+	return nil
+}
+
+func (a *Applier) makeCountriesMap() map[string]interface{} {
+	c := make(map[string]interface{}, 1)
+	if len(a.config.CountryAllowList) > 0 {
+		for _, v := range a.config.CountryAllowList {
+			c[strings.ToUpper(v)] = nil
+		}
+	}
+	if len(a.config.CountryDenyList) > 0 {
+		for _, v := range a.config.CountryDenyList {
+			c[strings.ToUpper(v)] = nil
+		}
+	}
+	return c
+}
+
+func (a *Applier) markBucketsForDeletion() error {
+	log.Debug("Start marking buckets")
+	countries := a.makeCountriesMap()
+	log.Debugf("Mark func receive countries: %v", countries)
+	buckets, err := a.storage.ListBuckets()
+	log.Debugf("Mark func receive buckets: %v", buckets)
+	if err != nil {
+		return err
+	}
+	// edge cases
+	if len(countries) == 0 {
+		log.Warn("Unable to run cleanup because not found countries in config")
+		return nil
+	}
+	if len(buckets) == 0 {
+		log.Warn("Unable to run cleanup because not found buckets in db")
+		return nil
+	}
+
+	for v := range buckets {
+		if _, ok := countries[strings.ToUpper(v)]; !ok {
+			log.Debugf("Bucket %s not in %v", strings.ToUpper(v), countries)
+			if err := a.storage.SetBoolKV(v, "deletion_mark", true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (a *Applier) cleanupCountryResources() error {
+	log.Debug("Start cleanup")
+	buckets, err := a.storage.ListBucketsForDeletion()
+	if err != nil {
+		return err
+	}
+
+	for _, bucket := range buckets {
+		ipset, err := a.storage.GetStringKV(bucket, "ipset")
+		if err != nil {
+			return err
+		}
+		rule, err := a.storage.GetRule(bucket, "rule")
+		if err != nil {
+			return err
+		}
+		if ipset == "" || len(rule) == 0 {
+			err := fmt.Errorf("cleanup failed. ipset: %v, rule: %v", ipset, rule)
+			return err
+		}
+		a.mu.RLock()
+		if _, ok := a.liveSets[ipset]; ok {
+			log.Debugf("Delete rule %v", rule)
+			if err := a.fw.DeleteRule(iptTable, iptChain, rule...); err != nil {
+				a.mu.RUnlock()
+				return err
+			}
+			log.Debugf("%s in %v", ipset, a.liveSets)
+			log.Debugf("Flush set %s", ipset)
+			if err := a.set.FlushSet(ipset); err != nil {
+				a.mu.RUnlock()
+				return err
+			}
+			log.Debugf("Destroy set %s", ipset)
+			if err := a.set.DestroySet(ipset); err != nil {
+				a.mu.RUnlock()
+				return err
+			}
+			log.Debugf("Delete bucket %s", bucket)
+			if err := a.storage.DeleteBucket(bucket); err != nil {
+				a.mu.RUnlock()
+				return err
+			}
+		}
+		if _, ok := a.liveSets[ipset]; !ok {
+			log.Debugf("Delete bucket %s", bucket)
+			if err := a.storage.DeleteBucket(bucket); err != nil {
+				a.mu.RUnlock()
+				return err
+			}
+		}
+		a.mu.RUnlock()
+	}
 	return nil
 }
