@@ -43,14 +43,32 @@ func NewGetter(localCTX context.CancelFunc, targets []string, checkInterval time
 }
 
 func (c *Getter) Run(ctx context.Context) {
-	// TODO add ticker
 	localCTX, cancel := context.WithCancel(ctx)
 	c.fnCancelRunCTX = cancel
+	go c.run(localCTX)
+}
+
+func (c *Getter) run(ctx context.Context) {
+	ticker := time.NewTicker(c.checkInterval)
+	defer ticker.Stop()
 	log.Debug("Getter started")
-	_ = localCTX
+	// fill bd on start
 	for _, target := range c.targets {
-		// https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
-		go c.updateCountryData(localCTX, target)
+		// TODO https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
+		go c.updateCountryData(ctx, target)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debug("Getter ctx:", ctx.Err())
+			return
+		case <-ticker.C:
+			for _, target := range c.targets {
+				// TODO https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
+				go c.updateCountryData(ctx, target)
+			}
+		}
 	}
 }
 
