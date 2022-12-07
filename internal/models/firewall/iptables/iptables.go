@@ -3,6 +3,7 @@ package iptables
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	iptables "github.com/coreos/go-iptables/iptables"
 	"github.com/hornwind/filter-chain/internal/models"
@@ -88,6 +89,8 @@ func (ipt *Iptables) EnsureRule(pos int, table, chain string, rulespec ...string
 func (ipt *Iptables) DeleteRule(table, chain string, rulespec ...string) error {
 	ipt.mu.Lock()
 	defer ipt.mu.Unlock()
+	// not so fast. Wait for the kernel to release resources
+	defer time.Sleep(1 * time.Second)
 	if err := ipt.iptables.DeleteIfExists(table, chain, rulespec...); err != nil {
 		log.Error(fmt.Sprintf("Delete rule in chain %s failed: %v", chain, err))
 		return err
