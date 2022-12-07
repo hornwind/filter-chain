@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	_ "github.com/hornwind/filter-chain/pkg/log"
 	log "github.com/sirupsen/logrus"
@@ -59,6 +60,7 @@ const IPSetCmd = "ipset"
 var EntryMemberPattern = "(?m)^(.*\n)*Members:\n"
 
 type runner struct {
+	mu   sync.RWMutex
 	exec utilexec.Interface
 }
 
@@ -90,6 +92,8 @@ func New(exec utilexec.Interface) Interface {
 
 // ListSets list all set names from kernel
 func (runner *runner) ListSets() ([]string, error) {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	out, err := runner.exec.Command(IPSetCmd, "list", "-n").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("error listing all sets, error: %v", err)
@@ -99,6 +103,8 @@ func (runner *runner) ListSets() ([]string, error) {
 
 // DestroySet is used to destroy a named set.
 func (runner *runner) DestroySet(set string) error {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if out, err := runner.exec.Command(IPSetCmd, "destroy", set).CombinedOutput(); err != nil {
 		return fmt.Errorf("error destroying set %s, error: %v(%s)", set, err, out)
 	}
@@ -109,11 +115,13 @@ func (runner *runner) DestroySet(set string) error {
 func (runner *runner) CreateSet(set *IPSet, ignoreExistErr bool) error {
 	// sets some IPSet fields if not present to their default values.
 	set.setIPSetDefaults()
-
 	// Validate ipset before creating
 	if err := set.Validate(); err != nil {
 		return err
 	}
+
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	return runner.createSet(set, ignoreExistErr)
 }
 
@@ -131,6 +139,8 @@ func (runner *runner) createSet(set *IPSet, ignoreExistErr bool) error {
 	if ignoreExistErr {
 		args = append(args, "-exist")
 	}
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if _, err := runner.exec.Command(IPSetCmd, args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("error creating ipset %s, error: %v", set.Name, err)
 	}
@@ -187,6 +197,8 @@ func (runner *runner) AddEntry(entry string, set *IPSet, ignoreExistErr bool) er
 	if ignoreExistErr {
 		args = append(args, "-exist")
 	}
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if out, err := runner.exec.Command(IPSetCmd, args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("error adding entry %s, error: %v (%s)", entry, err, out)
 	}
@@ -222,6 +234,8 @@ func (runner *runner) RestoreSet(entries []string, set *IPSet, ignoreExistErr bo
 	}
 
 	args := []string{"-exist", "restore"}
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	cmd := runner.exec.Command(IPSetCmd, args...)
 	cmd.SetStdin(strings.NewReader(ipset.String()))
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -231,6 +245,8 @@ func (runner *runner) RestoreSet(entries []string, set *IPSet, ignoreExistErr bo
 }
 
 func (runner *runner) SwapSets(tmpSet string, set string) error {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if _, err := runner.exec.Command(IPSetCmd, "swap", tmpSet, set).CombinedOutput(); err != nil {
 		return fmt.Errorf("error swap %s and %s set, error: %v", set, tmpSet, err)
 	}
@@ -239,6 +255,8 @@ func (runner *runner) SwapSets(tmpSet string, set string) error {
 
 // DelEntry is used to delete the specified entry from the set.
 func (runner *runner) DelEntry(entry string, set string) error {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if out, err := runner.exec.Command(IPSetCmd, "del", set, entry).CombinedOutput(); err != nil {
 		return fmt.Errorf("error deleting entry %s: from set: %s, error: %v (%s)", entry, set, err, out)
 	}
@@ -247,6 +265,8 @@ func (runner *runner) DelEntry(entry string, set string) error {
 
 // TestEntry is used to check whether the specified entry is in the set or not.
 func (runner *runner) TestEntry(entry string, set string) (bool, error) {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if out, err := runner.exec.Command(IPSetCmd, "test", set, entry).CombinedOutput(); err == nil {
 		reg, e := regexp.Compile("is NOT in set " + set)
 		if e == nil && reg.MatchString(string(out)) {
@@ -266,7 +286,9 @@ func (runner *runner) ListEntries(set string) ([]string, error) {
 	if len(set) == 0 {
 		return nil, fmt.Errorf("set name can't be nil")
 	}
+	runner.mu.Lock()
 	out, err := runner.exec.Command(IPSetCmd, "list", set).CombinedOutput()
+	runner.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("error listing set: %s, error: %v", set, err)
 	}
@@ -284,6 +306,8 @@ func (runner *runner) ListEntries(set string) ([]string, error) {
 
 // FlushSet deletes all entries from a named set.
 func (runner *runner) FlushSet(set string) error {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
 	if _, err := runner.exec.Command(IPSetCmd, "flush", set).CombinedOutput(); err != nil {
 		return fmt.Errorf("error flushing set: %s, error: %v", set, err)
 	}
