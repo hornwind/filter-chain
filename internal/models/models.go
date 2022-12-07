@@ -18,8 +18,13 @@ type Repository interface {
 	GetIpsetTimestamp(name string) (time.Time, error)
 	GetBoolKV(bucket, key string) (bool, error)
 	SetBoolKV(bucket, key string, val bool) error
-	// TODO
-	// Delete(ctx context.Context, c IpsetResources) (error)
+	GetRule(bucket, key string) ([]string, error)
+	StoreRule(bucket, key string, rule []string) error
+	GetStringKV(bucket, key string) (string, error)
+	SetStringKV(bucket, key, val string) error
+	ListBuckets() (map[string]interface{}, error)
+	ListBucketsForDeletion() ([]string, error)
+	DeleteBucket(bucket string) error
 }
 
 type Firewall interface {

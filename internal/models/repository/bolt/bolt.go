@@ -251,3 +251,170 @@ func (s *Storage) SetBoolKV(bucket, key string, val bool) error {
 	}
 	return nil
 }
+
+func (s *Storage) DeleteBucket(bucket string) error {
+	err := s.storage.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket([]byte(bucket)); err != nil {
+			log.Error("bucket ", bucket, " is not exists or it's not a bucket")
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("deletion for bucket %s failed: %v", bucket, err)
+	}
+	return nil
+}
+
+func (s *Storage) ListBuckets() (map[string]interface{}, error) {
+	buckets := make(map[string]interface{}, 1)
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		err := tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+			buckets[string(name)] = nil
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("list buckets: %v", buckets)
+	return buckets, nil
+}
+
+func (s *Storage) ListBucketsForDeletion() ([]string, error) {
+	buckets := make([]string, 0, 4)
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			data := b.Get([]byte("deletion_mark"))
+			if data != nil {
+				var mark bool
+				if err := json.Unmarshal(data, &mark); err != nil {
+					log.Warn("Unmarshalled status: ", mark)
+					log.Warn("Could not unmarshal status from db: ", err)
+					return err
+				}
+				if mark {
+					buckets = append(buckets, string(name))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("This buckets should be deleted: %s", buckets)
+	return buckets, nil
+}
+
+func (s *Storage) GetRule(bucket, key string) ([]string, error) {
+	var rule []string
+	var data []byte
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return nil
+		}
+		data = b.Get([]byte(key))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if data == nil {
+		log.Warn("Received data from db is nil, return nil")
+		return nil, nil
+	}
+	if data != nil {
+		if err = json.Unmarshal(data, &rule); err != nil {
+			log.Warn("Unmarshalled rule: ", rule)
+			log.Warn("Could not unmarshal status from db: ", err)
+			return nil, err
+		}
+	}
+
+	log.Debugf("%s is %v", key, rule)
+	return rule, nil
+}
+
+func (s *Storage) StoreRule(bucket, key string, rule []string) error {
+	err := s.storage.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b != nil {
+			status, err := json.Marshal(rule)
+			if err != nil {
+				return err
+			}
+			log.Debug("Change ", key, " in bucket ", bucket, " to ", rule)
+			if err := b.Put([]byte(key), []byte(status)); err != nil {
+				return fmt.Errorf("could not update %s: %v", key, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("update operation for %s bucket failed: %v", bucket, err)
+	}
+	return nil
+}
+
+func (s *Storage) GetStringKV(bucket, key string) (string, error) {
+	var out string
+	var data []byte
+	err := s.storage.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return nil
+		}
+		data = b.Get([]byte(key))
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if data == nil {
+		log.Warn("Received data from db is nil, return false")
+		return "", nil
+	}
+	if data != nil {
+		if err = json.Unmarshal(data, &out); err != nil {
+			log.Warnf("GetStringKV unmarshalled: %v", out)
+			log.Warnf("Could not unmarshal str from db: %v", err)
+			return "", err
+		}
+	}
+
+	log.Debugf("%s is %v", key, out)
+	return out, nil
+}
+
+func (s *Storage) SetStringKV(bucket, key, val string) error {
+	err := s.storage.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b != nil {
+			data, err := json.Marshal(val)
+			if err != nil {
+				return err
+			}
+			log.Debug("Change ", key, " in bucket ", bucket, " to ", val)
+			if err := b.Put([]byte(key), []byte(data)); err != nil {
+				return fmt.Errorf("could not update %s: %v", key, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("update operation for %s bucket failed: %v", bucket, err)
+	}
+	return nil
+}
