@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +16,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	dbPath = "/var/lib/filter-chain"
+)
+
 func main() {
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
@@ -26,17 +31,21 @@ func main() {
 
 	log.Debug("Start app")
 
-	config, err := config.LoadConfig("./test-data")
-	if err != nil {
-		log.Fatal("cannot load config:", err)
+	if err := os.Mkdir(dbPath, 0700); !os.IsExist(err) {
+		log.Errorf("Could not access to db path %s", dbPath)
 	}
-	log.Debugf("%v", config)
 
-	storage, err := bolt.NewStorage("./test-data/data.db")
+	storage, err := bolt.NewStorage(fmt.Sprintf("%s/%s", dbPath, "data.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer storage.Close()
+
+	config, err := config.LoadConfig(dbPath)
+	if err != nil {
+		log.Fatal("cannot load config:", err)
+	}
+	log.Debugf("%v", config)
 
 	interval, err := time.ParseDuration(config.RefreshInterval)
 	if err != nil {
