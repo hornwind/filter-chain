@@ -308,11 +308,7 @@ func (a *Applier) markBucketsForDeletion() error {
 	if err != nil {
 		return err
 	}
-	// edge cases
-	if len(countries) == 0 {
-		log.Warn("Unable to run cleanup because not found countries in config")
-		return nil
-	}
+	// edge case
 	if len(buckets) == 0 {
 		log.Warn("Unable to run cleanup because not found buckets in db")
 		return nil
@@ -386,6 +382,9 @@ func (a *Applier) cleanupCountryResources() error {
 }
 
 func (a *Applier) cleanupNetworks() error {
+	if len(a.config.AllowNetworkList) > 0 {
+		return nil
+	}
 	a.mu.RLock()
 	if _, ok := a.liveSets[netAllowIpsetName]; ok {
 		log.Debugf("Delete rule %v", netAllowRule)
