@@ -136,10 +136,10 @@ func (s *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 		i6 []byte
 
 		timestamp time.Time
-		asn       []string
-		ipv4      []string
-		ipv6      []string
 	)
+	asn := make([]string, 0, 1024)
+	ipv4 := make([]string, 0, 1024)
+	ipv6 := make([]string, 0, 1024)
 
 	// Fetch data from DB
 	err := s.storage.View(func(tx *bolt.Tx) error {
@@ -171,19 +171,19 @@ func (s *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 	}
 
 	// Unmarsha data
-	if err = json.Unmarshal(t, &timestamp); err != nil {
+	if err := json.Unmarshal(t, &timestamp); err != nil {
 		log.Warn(err)
 		timestamp = time.Now().AddDate(0, 0, -2)
 	}
-	if err = json.Unmarshal(a, &asn); err != nil {
+	if err := json.Unmarshal(a, &asn); err != nil {
 		log.Error(err)
 		return nil, err
 	}
-	if err = json.Unmarshal(i4, &ipv4); err != nil {
+	if err := json.Unmarshal(i4, &ipv4); err != nil {
 		log.Error(err)
 		return nil, err
 	}
-	if err = json.Unmarshal(i6, &ipv6); err != nil {
+	if err := json.Unmarshal(i6, &ipv6); err != nil {
 		log.Error(err)
 		return nil, err
 	}
