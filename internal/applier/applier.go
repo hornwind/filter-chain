@@ -25,6 +25,11 @@ const (
 	iptMatchSetTemplate    = "-m set --match-set %s src -j %s"
 )
 
+var (
+	netAllowIpsetName = strings.Join([]string{namePrefix, "allow", "networks"}, "-")
+	netAllowRule      = []string{"-m", "set", "--match-set", netAllowIpsetName, "src", "-j", "ACCEPT"}
+)
+
 type Applier struct {
 	mu             sync.RWMutex
 	fnCancelRunCTX context.CancelFunc
@@ -105,6 +110,10 @@ func (a *Applier) runCleanup(ctx context.Context) {
 				log.Warn(err)
 			}
 			if err := a.cleanupCountryResources(); err != nil {
+				log.Warn(err)
+				a.fnCancelRunCTX()
+			}
+			if err := a.cleanupNetworks(); err != nil {
 				log.Warn(err)
 				a.fnCancelRunCTX()
 			}
@@ -208,14 +217,13 @@ func (a *Applier) reconcile() error {
 		return err
 	}
 
-	if len(a.config.AllowNetworkList) != 0 {
-		ipsetName := strings.Join([]string{namePrefix, "allow", "networks"}, "-")
-		if err := a.ipsetCreateOrUpdate(ipsetName, a.config.AllowNetworkList); err != nil {
+	if len(a.config.AllowNetworkList) > 0 {
+		if err := a.ipsetCreateOrUpdate(netAllowIpsetName, a.config.AllowNetworkList); err != nil {
 			return err
 		}
 		rule := &rule{
 			bucket: "",
-			rule:   []string{"-m", "set", "--match-set", ipsetName, "src", "-j", "ACCEPT"},
+			rule:   netAllowRule,
 		}
 		ruleChan <- *rule
 	}
@@ -232,7 +240,12 @@ func (a *Applier) reconcile() error {
 			// create set if not applied
 			if !ok {
 				ipsetName := strings.Join([]string{namePrefix, bucket}, "-")
-				if err := a.ipsetCreateOrUpdate(ipsetName, a.config.AllowNetworkList); err != nil {
+				entries, err := a.storage.GetIpsetResources(bucket)
+				if err != nil {
+					log.Warnf("Could not get ipset resource from db: %v", err)
+					return err
+				}
+				if err := a.ipsetCreateOrUpdate(ipsetName, entries.Ipv4); err != nil {
 					log.Warnf("Could not create ipset: %v", err)
 					return err
 				}
@@ -369,5 +382,29 @@ func (a *Applier) cleanupCountryResources() error {
 		}
 		a.mu.RUnlock()
 	}
+	return nil
+}
+
+func (a *Applier) cleanupNetworks() error {
+	a.mu.RLock()
+	if _, ok := a.liveSets[netAllowIpsetName]; ok {
+		log.Debugf("Delete rule %v", netAllowRule)
+		if err := a.fw.DeleteRule(iptTable, iptChain, netAllowRule...); err != nil {
+			a.mu.RUnlock()
+			return err
+		}
+		log.Debugf("%s in %v", netAllowIpsetName, a.liveSets)
+		log.Debugf("Flush set %s", netAllowIpsetName)
+		if err := a.set.FlushSet(netAllowIpsetName); err != nil {
+			a.mu.RUnlock()
+			return err
+		}
+		log.Debugf("Destroy set %s", netAllowIpsetName)
+		if err := a.set.DestroySet(netAllowIpsetName); err != nil {
+			a.mu.RUnlock()
+			return err
+		}
+	}
+	a.mu.RUnlock()
 	return nil
 }
