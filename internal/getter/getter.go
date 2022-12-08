@@ -61,7 +61,7 @@ func (c *Getter) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug("Getter ctx:", ctx.Err())
+			log.Debugf("Getter ctx: %v", ctx.Err())
 			return
 		case <-ticker.C:
 			for _, target := range c.targets {
@@ -74,14 +74,14 @@ func (c *Getter) run(ctx context.Context) {
 
 func (c *Getter) updateCountryData(ctx context.Context, countryCode string) error {
 	if c.countryMustUpdate(countryCode) {
-		log.Debug(fmt.Sprintf("Update data for country %s", countryCode))
+		log.Debugf("Update data for country %s", countryCode)
 		if err := c.getRIPECountryData(ctx, countryCode); err != nil {
 			log.Error(err)
 			return err
 		}
 		return nil
 	}
-	log.Debug(fmt.Sprintf("Country %s no need to update", countryCode))
+	log.Debugf("Country %s no need to update", countryCode)
 	return nil
 }
 
@@ -96,7 +96,7 @@ func (c *Getter) countryMustUpdate(countryCode string) bool {
 
 func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) error {
 	url := fmt.Sprintf("https://stat.ripe.net/data/country-resource-list/data.json?resource=%s&v4_format=prefix", countryCode)
-	log.Debug("Get URL:", url)
+	log.Debugf("Get URL: %s", url)
 	// TODO with context https://golang.cafe/blog/golang-context-with-timeout-example.html
 	resp, err := http.Get(url)
 	if err != nil {

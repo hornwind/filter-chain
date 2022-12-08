@@ -71,7 +71,7 @@ func (a *Applier) runApplier(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug("Applier ctx:", ctx.Err())
+			log.Debugf("Applier ctx: %v", ctx.Err())
 			return
 		case <-ticker.C:
 			if err := a.refreshLiveSets(); err != nil {
@@ -95,7 +95,7 @@ func (a *Applier) runCleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug("Cleanup ctx:", ctx.Err())
+			log.Debugf("Cleanup ctx: %v", ctx.Err())
 			return
 		case <-ticker.C:
 			if err := a.refreshLiveSets(); err != nil {
@@ -191,7 +191,7 @@ func (a *Applier) reconcile() error {
 				return
 			}
 			if item.bucket != "" {
-				log.Debug("Set bucket ", item.bucket, " is applied")
+				log.Debugf("Set bucket %s is applied", item.bucket)
 				if err := a.storage.StoreRule(item.bucket, "rule", item.rule); err != nil {
 					log.Errorf("Could not store rule %s in bucket %s", item.rule, item.bucket)
 				}

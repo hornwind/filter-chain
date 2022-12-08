@@ -96,7 +96,7 @@ func (s *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
 	var result time.Time
 	faketime := time.Now().AddDate(0, 0, -2)
 
-	log.Debug(fmt.Sprintf("fetch %s from db", name))
+	log.Debugf("fetch %s from db", name)
 	err := s.storage.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(name))
 		if b == nil {
@@ -124,7 +124,7 @@ func (s *Storage) GetIpsetTimestamp(name string) (time.Time, error) {
 			return faketime, err
 		}
 	}
-	log.Debug(fmt.Sprintf("%s update time: %v", name, result))
+	log.Debugf("%s update time: %v", name, result)
 	return result, err
 }
 
@@ -166,7 +166,7 @@ func (s *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 		return nil
 	})
 	if err != nil {
-		log.Error("Fetch name data from BD error:", err)
+		log.Errorf("Fetch name data from BD error: %v", err)
 		return nil, err
 	}
 
@@ -227,7 +227,7 @@ func (s *Storage) GetBoolKV(bucket, key string) (bool, error) {
 		}
 	}
 
-	log.Debug(fmt.Sprintf("%s is %v", key, status))
+	log.Debugf("%s is %v", key, status)
 	return status, nil
 }
 
@@ -239,7 +239,7 @@ func (s *Storage) SetBoolKV(bucket, key string, val bool) error {
 			if err != nil {
 				return err
 			}
-			log.Debug("Change ", key, " in bucket ", bucket, " to ", val)
+			log.Debugf("Change %s in bucket %s to %v", key, bucket, val)
 			if err := b.Put([]byte(key), []byte(status)); err != nil {
 				return fmt.Errorf("could not update %s: %v", key, err)
 			}
@@ -255,7 +255,7 @@ func (s *Storage) SetBoolKV(bucket, key string, val bool) error {
 func (s *Storage) DeleteBucket(bucket string) error {
 	err := s.storage.Update(func(tx *bolt.Tx) error {
 		if err := tx.DeleteBucket([]byte(bucket)); err != nil {
-			log.Error("bucket ", bucket, " is not exists or it's not a bucket")
+			log.Errorf("bucket %s is not exists or it's not a bucket", bucket)
 			return err
 		}
 		return nil
@@ -354,7 +354,7 @@ func (s *Storage) StoreRule(bucket, key string, rule []string) error {
 			if err != nil {
 				return err
 			}
-			log.Debug("Change ", key, " in bucket ", bucket, " to ", rule)
+			log.Debugf("Change %s in bucket %s to %v", key, bucket, rule)
 			if err := b.Put([]byte(key), []byte(status)); err != nil {
 				return fmt.Errorf("could not update %s: %v", key, err)
 			}
@@ -406,7 +406,7 @@ func (s *Storage) SetStringKV(bucket, key, val string) error {
 			if err != nil {
 				return err
 			}
-			log.Debug("Change ", key, " in bucket ", bucket, " to ", val)
+			log.Debugf("Change %s in bucket %s to %v", key, bucket, val)
 			if err := b.Put([]byte(key), []byte(data)); err != nil {
 				return fmt.Errorf("could not update %s: %v", key, err)
 			}

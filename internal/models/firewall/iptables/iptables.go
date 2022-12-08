@@ -1,7 +1,6 @@
 package iptables
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -41,7 +40,7 @@ func (ipt *Iptables) EnsureChain(table, chain, policy string) (bool, error) {
 		}
 	}
 	if err := ipt.iptables.NewChain(table, chain); err != nil {
-		log.Error(fmt.Sprintf("Create chain %s in table %s failed: %v", chain, table, err))
+		log.Errorf("Create chain %s in table %s failed: %v", chain, table, err)
 		return false, err
 	}
 	return true, nil
@@ -57,7 +56,7 @@ func (ipt *Iptables) DeleteChain(table, chain string) error {
 	} else {
 		if ok {
 			if err := ipt.iptables.ClearAndDeleteChain(table, chain); err != nil {
-				log.Error(fmt.Sprintf("Delete chain %s in table %s failed: %v", chain, table, err))
+				log.Errorf("Delete chain %s in table %s failed: %v", chain, table, err)
 				return err
 			}
 		}
@@ -69,7 +68,7 @@ func (ipt *Iptables) DeleteChain(table, chain string) error {
 func (ipt *Iptables) EnsureRule(pos int, table, chain string, rulespec ...string) (bool, error) {
 	ipt.mu.Lock()
 	defer ipt.mu.Unlock()
-	log.Debug("Check iptables rule", rulespec)
+	log.Debugf("Check iptables rule %v", rulespec)
 	if ok, err := ipt.iptables.Exists(table, chain, rulespec...); err != nil {
 		log.Error(err)
 		return false, err
@@ -79,7 +78,7 @@ func (ipt *Iptables) EnsureRule(pos int, table, chain string, rulespec ...string
 		}
 	}
 	if err := ipt.iptables.Insert(table, chain, pos, rulespec...); err != nil {
-		log.Error(fmt.Sprintf("Insert rule into chain %s in table %s failed: %v", chain, table, err))
+		log.Errorf("Insert rule into chain %s in table %s failed: %v", chain, table, err)
 		return false, err
 	}
 	return true, nil
@@ -92,7 +91,7 @@ func (ipt *Iptables) DeleteRule(table, chain string, rulespec ...string) error {
 	// not so fast. Wait for the kernel to release resources
 	defer time.Sleep(1 * time.Second)
 	if err := ipt.iptables.DeleteIfExists(table, chain, rulespec...); err != nil {
-		log.Error(fmt.Sprintf("Delete rule in chain %s failed: %v", chain, err))
+		log.Errorf("Delete rule in chain %s failed: %v", chain, err)
 		return err
 	}
 	return nil

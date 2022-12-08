@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,7 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot load config:", err)
 	}
-	log.Debug(fmt.Sprintf("%v", config))
+	log.Debugf("%v", config)
 
 	storage, err := bolt.NewStorage("./test-data/data.db")
 	if err != nil {
