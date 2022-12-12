@@ -53,9 +53,17 @@ func (c *Getter) run(ctx context.Context) {
 	defer ticker.Stop()
 	log.Debug("Getter started")
 	// fill bd on start
+	errch := make(chan error, len(c.targets))
 	for _, target := range c.targets {
-		// TODO https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
-		go c.updateCountryData(ctx, target)
+		go func(ctx context.Context, target string) {
+			errch <- c.updateCountryData(ctx, target)
+		}(ctx, target)
+	}
+	for range c.targets {
+		e := <-errch
+		if e != nil {
+			log.Errorf("Getter error: %v", e)
+		}
 	}
 
 	for {
@@ -64,9 +72,17 @@ func (c *Getter) run(ctx context.Context) {
 			log.Debugf("Getter ctx: %v", ctx.Err())
 			return
 		case <-ticker.C:
+			errch := make(chan error, len(c.targets))
 			for _, target := range c.targets {
-				// TODO https://stackoverflow.com/questions/62387307/how-to-catch-errors-from-goroutines
-				go c.updateCountryData(ctx, target)
+				go func(ctx context.Context, target string) {
+					errch <- c.updateCountryData(ctx, target)
+				}(ctx, target)
+			}
+			for range c.targets {
+				e := <-errch
+				if e != nil {
+					log.Errorf("Getter error: %v", e)
+				}
 			}
 		}
 	}
