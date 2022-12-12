@@ -31,6 +31,10 @@ type RespJson struct {
 	} `json:"data"`
 }
 
+const (
+	maxRqDuration = 30 * time.Second
+)
+
 func NewGetter(localCTX context.CancelFunc, targets []string, checkInterval time.Duration, storage models.Repository) (*Getter, error) {
 	getter := &Getter{
 		fnCancelRunCTX: localCTX,
@@ -111,16 +115,24 @@ func (c *Getter) countryMustUpdate(countryCode string) bool {
 }
 
 func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) error {
+	ctx, cancel := context.WithTimeout(ctx, maxRqDuration)
+	defer cancel()
 	url := fmt.Sprintf("https://stat.ripe.net/data/country-resource-list/data.json?resource=%s&v4_format=prefix", countryCode)
 	log.Debugf("Get URL: %s", url)
-	// TODO with context https://golang.cafe/blog/golang-context-with-timeout-example.html
-	resp, err := http.Get(url)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Warn(err)
+		log.Error(err)
+	}
+
+	hc := &http.Client{}
+	resp, err := hc.Do(req)
+	if err != nil {
+		log.Error(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get data from RIPE with url %s failed", url)
+		return fmt.Errorf("get data from RIPE with url %s has a %v code", url, resp.StatusCode)
 	}
 
 	var respJson RespJson
