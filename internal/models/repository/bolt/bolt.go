@@ -143,22 +143,26 @@ func (s *Storage) GetIpsetResources(name string) (*models.IpsetResources, error)
 
 	// Fetch data from DB
 	err := s.storage.View(func(tx *bolt.Tx) error {
-		t = tx.Bucket([]byte(name)).Get([]byte("timestamp"))
+		b := tx.Bucket([]byte(name))
+		if b == nil {
+			return fmt.Errorf("bucket %s is not exist", name)
+		}
+		t = b.Get([]byte("timestamp"))
 		if t == nil {
 			return fmt.Errorf("could not fetch timestamp for %s", name)
 		}
 
-		a = tx.Bucket([]byte(name)).Get([]byte("asn"))
+		a = b.Get([]byte("asn"))
 		if t == nil {
 			return fmt.Errorf("could not fetch asn for %s", name)
 		}
 
-		i4 = tx.Bucket([]byte(name)).Get([]byte("ipv4"))
+		i4 = b.Get([]byte("ipv4"))
 		if t == nil {
 			return fmt.Errorf("could not fetch ipv4 for %s", name)
 		}
 
-		i6 = tx.Bucket([]byte(name)).Get([]byte("ipv6"))
+		i6 = b.Get([]byte("ipv6"))
 		if t == nil {
 			return fmt.Errorf("could not fetch ipv6 for %s", name)
 		}

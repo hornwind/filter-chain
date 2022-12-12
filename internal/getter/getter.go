@@ -122,13 +122,13 @@ func (c *Getter) getRIPECountryData(ctx context.Context, countryCode string) err
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Error(err)
+		return err
 	}
 
 	hc := &http.Client{}
 	resp, err := hc.Do(req)
 	if err != nil {
-		log.Error(err)
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

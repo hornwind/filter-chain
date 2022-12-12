@@ -241,6 +241,9 @@ func (a *Applier) reconcile() error {
 			if !ok {
 				ipsetName := strings.Join([]string{namePrefix, bucket}, "-")
 				entries, err := a.storage.GetIpsetResources(bucket)
+				if entries == nil {
+					return fmt.Errorf("receive a nil from db")
+				}
 				if err != nil {
 					log.Warnf("Could not get ipset resource from db: %v", err)
 					return err
