@@ -104,7 +104,7 @@ jobs:
           add-paths: |
             CHANGELOG.md
             .changes
-          commit-message: "chore: update changelog"
+          commit-message: "chore: update changelog [skip actions]"
           committer: GitHub <noreply@github.com>
           author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
           branch: "${{ needs.tagger.outputs.tag }}-changelog"

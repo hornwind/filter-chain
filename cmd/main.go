@@ -13,6 +13,7 @@ import (
 	"github.com/hornwind/filter-chain/internal/models/repository/bolt"
 	"github.com/hornwind/filter-chain/pkg/config"
 	_ "github.com/hornwind/filter-chain/pkg/log"
+	"github.com/hornwind/filter-chain/pkg/validate"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -46,6 +47,15 @@ func main() {
 		log.Fatal("cannot load config:", err)
 	}
 	log.Debugf("%v", config)
+
+	if err := validate.ValidateList(config.CountryAllowList); err != nil {
+		log.Fatalf("CountryAllowList validation failed: %v", err)
+	}
+
+	if err := validate.ValidateList(config.CountryDenyList); err != nil {
+		log.Fatalf("CountryDenyList validation failed: %v", err)
+		stop()
+	}
 
 	interval, err := time.ParseDuration(config.RefreshInterval)
 	if err != nil {
