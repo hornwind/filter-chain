@@ -37,7 +37,7 @@ type Applier struct {
 	storage        models.Repository
 	fw             models.Firewall
 	set            ipset.Interface
-	liveSets       map[string]interface{}
+	liveSets       map[string]struct{}
 }
 
 func NewApplier(localCTX context.CancelFunc, config config.Config, storage models.Repository) (*Applier, error) {
@@ -54,7 +54,7 @@ func NewApplier(localCTX context.CancelFunc, config config.Config, storage model
 		storage:        storage,
 		set:            ipset.New(exec),
 		fw:             fw,
-		liveSets:       make(map[string]interface{}, 1),
+		liveSets:       make(map[string]struct{}, 1),
 	}
 	return applier, nil
 }
@@ -130,15 +130,15 @@ func (a *Applier) refreshLiveSets() error {
 	if len(sets) == 0 {
 		// flush liveSets
 		a.mu.Lock()
-		a.liveSets = make(map[string]interface{}, 1)
+		a.liveSets = make(map[string]struct{}, 1)
 		a.mu.Unlock()
 		return nil
 	}
 	// flush and refill liveSets
 	a.mu.Lock()
-	a.liveSets = make(map[string]interface{}, 1)
+	a.liveSets = make(map[string]struct{}, 1)
 	for _, v := range sets {
-		a.liveSets[v] = nil
+		a.liveSets[v] = struct{}{}
 	}
 	a.mu.Unlock()
 	return nil
@@ -287,16 +287,16 @@ func (a *Applier) reconcile() error {
 	return nil
 }
 
-func (a *Applier) makeCountriesMap() map[string]interface{} {
-	c := make(map[string]interface{}, 1)
+func (a *Applier) makeCountriesMap() map[string]struct{} {
+	c := make(map[string]struct{}, 1)
 	if len(a.config.CountryAllowList) > 0 {
 		for _, v := range a.config.CountryAllowList {
-			c[strings.ToUpper(v)] = nil
+			c[strings.ToUpper(v)] = struct{}{}
 		}
 	}
 	if len(a.config.CountryDenyList) > 0 {
 		for _, v := range a.config.CountryDenyList {
-			c[strings.ToUpper(v)] = nil
+			c[strings.ToUpper(v)] = struct{}{}
 		}
 	}
 	return c

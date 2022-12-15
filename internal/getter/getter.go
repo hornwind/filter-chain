@@ -18,7 +18,6 @@ type Getter struct {
 	fnCancelRunCTX context.CancelFunc
 	checkInterval  time.Duration
 	storage        models.Repository
-	// countryData models.IpsetResources
 }
 
 type RespJson struct {
