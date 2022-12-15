@@ -22,8 +22,8 @@ type Repository interface {
 	StoreRule(bucket, key string, rule []string) error
 	GetStringKV(bucket, key string) (string, error)
 	SetStringKV(bucket, key, val string) error
-	ListBuckets() (map[string]interface{}, error)
-	ListBucketsForDeletion() ([]string, error)
+	ListBuckets() (map[string]struct{}, error)
+	ListBucketsForDeletion() (map[string]struct{}, error)
 	DeleteBucket(bucket string) error
 }
 
@@ -36,4 +36,6 @@ type Firewall interface {
 	EnsureRule(pos int, table, chain string, rulespec ...string) (bool, error)
 	// DeleteRule checks if the specified rule is present and, if so, deletes it.
 	DeleteRule(table, chain string, rulespec ...string) error
+	// CheckRule checks if the specified rule is present and return bool status and err.
+	CheckRule(table, chain string, rulespec ...string) (bool, error)
 }

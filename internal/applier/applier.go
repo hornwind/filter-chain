@@ -64,6 +64,7 @@ func (a *Applier) Run(ctx context.Context) {
 	a.fnCancelRunCTX = cancel
 	go a.runApplier(localCTX)
 	go a.runCleanup(localCTX)
+	go a.runRechecker(localCTX)
 }
 
 func (a *Applier) runApplier(ctx context.Context) {
@@ -116,6 +117,27 @@ func (a *Applier) runCleanup(ctx context.Context) {
 			if err := a.cleanupNetworks(); err != nil {
 				log.Warn(err)
 				a.fnCancelRunCTX()
+			}
+		}
+	}
+}
+
+func (a *Applier) runRechecker(ctx context.Context) {
+	ticker := time.NewTicker(reconciliationInterval * 2)
+	defer ticker.Stop()
+	log.Debug("Checker started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debugf("Checker ctx: %v", ctx.Err())
+			return
+		case <-ticker.C:
+			if err := a.refreshLiveSets(); err != nil {
+				log.Warn(err)
+			}
+			if err := a.recheckResources(); err != nil {
+				log.Warn(err)
 			}
 		}
 	}
@@ -235,6 +257,9 @@ func (a *Applier) reconcile() error {
 		} else {
 			// if applied skip step
 			if ok {
+				muPos.Lock()
+				pos++
+				muPos.Unlock()
 				return nil
 			}
 			// create set if not applied
@@ -335,7 +360,7 @@ func (a *Applier) cleanupCountryResources() error {
 		return err
 	}
 
-	for _, bucket := range buckets {
+	for bucket := range buckets {
 		ipset, err := a.storage.GetStringKV(bucket, "ipset")
 		if err != nil {
 			return err
@@ -408,5 +433,58 @@ func (a *Applier) cleanupNetworks() error {
 		}
 	}
 	a.mu.RUnlock()
+	return nil
+}
+
+func (a *Applier) recheckResources() error {
+	allBuckets, err := a.storage.ListBuckets()
+	if err != nil {
+		return err
+	}
+	bucketsForDeletion, err := a.storage.ListBucketsForDeletion()
+	if err != nil {
+		return err
+	}
+
+	for bucket := range allBuckets {
+		if _, ok := bucketsForDeletion[bucket]; ok {
+			continue
+		}
+		ipset, err := a.storage.GetStringKV(bucket, "ipset")
+		if err != nil {
+			return err
+		}
+		rule, err := a.storage.GetRule(bucket, "rule")
+		if err != nil {
+			return err
+		}
+		if ipset == "" || len(rule) == 0 {
+			log.Warnf("Skip %s, ipset: %v, rule: %v", bucket, ipset, rule)
+			continue
+		}
+		// if ipset is not exist, CheckRule will be failed
+		a.mu.RLock()
+		_, ipsetStatus := a.liveSets[ipset]
+		a.mu.RUnlock()
+		if !ipsetStatus {
+			log.Debugf("Ipset %s is not exist, mark %s unapplied", ipset, bucket)
+			if err := a.storage.SetBoolKV(bucket, "applied", false); err != nil {
+				log.Errorf("Could not unset applied status for %s: %v", bucket, err)
+			}
+			continue
+		}
+
+		ruleStatus, err := a.fw.CheckRule(iptTable, iptChain, rule...)
+		if err != nil {
+			return err
+		}
+		if !ruleStatus {
+			log.Debugf("Rule for bucket %s is not exist, mark it unapplied", bucket)
+			if err := a.storage.SetBoolKV(bucket, "applied", false); err != nil {
+				log.Errorf("Could not unset applied status for %s: %v", bucket, err)
+			}
+		}
+	}
+
 	return nil
 }
