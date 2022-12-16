@@ -1,0 +1,6 @@
+kind: New feature
+body: Add check and recreation iptables rule if manually removed
+time: 2022-12-16T02:17:46.385263824+03:00
+custom:
+  Author: hornwind
+  Issue: ""
