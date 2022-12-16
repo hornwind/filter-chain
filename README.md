@@ -6,6 +6,9 @@ To solve these problems, there are more powerful (and paid) services and I recom
 ## Requirements
 - Any modern Linux distro with iptables and ipset support.
 
+## Installation
+Use the [**ansible**](deploy/filter-chain-role/README.md) (`deploy/filter-chain-role`) for install iptables, ipset and filter-chain.
+
 ## Configuration
 Example config:
 ```yaml
@@ -43,5 +46,5 @@ Note that it is recommended to save only an empty `ipset-filter` chain. In any c
 In turn, the filter-chain will create ipsets at startup and add rules to the chain.
 
 ### TODO
-- [ ] Ansible role and install docs
+- [X] Ansible role and install docs
 - [ ] Automatic creation a jump rule
