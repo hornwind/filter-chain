@@ -1,0 +1,6 @@
+---
+- name: restart filter-chain
+  systemd:
+    name: filter-chain
+    state: restarted
+  become: true
