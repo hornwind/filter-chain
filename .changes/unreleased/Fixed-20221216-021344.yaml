@@ -1,0 +1,6 @@
+kind: Fixed
+body: Optimize mem consumption for map
+time: 2022-12-16T02:13:44.849109258+03:00
+custom:
+  Author: hornwind
+  Issue: ""

@@ -1,10 +1,13 @@
 # Filter-Chain
 Dynamic iptables filter chain\
 If you need to block subnets from some countries for partially eliminate L7 DDOS, bots or port scan. [RIPE](https://stat.ripe.net/docs/data_api#country-resource-list) used as subnet datasource.\
-To solve these problems, there are more powerful(and paid) services and I recommend to use them in the next.
+To solve these problems, there are more powerful (and paid) services and I recommend to use them in the next.
 
 ## Requirements
 - Any modern Linux distro with iptables and ipset support.
+
+## Installation
+Use the [**ansible**](deploy/filter-chain-role) (`deploy/filter-chain-role`) for install iptables, ipset and filter-chain.
 
 ## Configuration
 Example config:
@@ -39,9 +42,9 @@ iptables -A INPUT -i eth0 -j DROP
 # Then save rules
 iptables-save > /etc/iptables/rules.v4
 ```
-Note that it is recommended to save only an empty filter chain. In any case, rules relating to ipsets that do not yet exist will not be applied at startup.\
+Note that it is recommended to save only an empty `ipset-filter` chain. In any case, rules relating to ipsets that do not yet exist will not be applied at startup.\
 In turn, the filter-chain will create ipsets at startup and add rules to the chain.
 
 ### TODO
-- [ ] Ansible role and install docs
+- [X] Ansible role and install docs
 - [ ] Automatic creation a jump rule

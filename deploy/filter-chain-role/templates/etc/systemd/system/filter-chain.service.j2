@@ -1,0 +1,20 @@
+{{ ansible_managed|comment }}
+
+[Unit]
+Description=Filter-Chain Service
+After=network-pre.target iptables.service ip6tables.service
+Wants=network-pre.target
+ConditionFileNotEmpty={{ filter_chain_dir }}/filter-chain
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+Restart=on-failure
+RestartSec=10
+
+ExecStart={{ filter_chain_dir }}/filter-chain
+
+[Install]
+WantedBy=multi-user.target

@@ -96,3 +96,16 @@ func (ipt *Iptables) DeleteRule(table, chain string, rulespec ...string) error {
 	}
 	return nil
 }
+
+// CheckRule checks if the specified rule is present and return bool status and err.
+func (ipt *Iptables) CheckRule(table, chain string, rulespec ...string) (bool, error) {
+	ipt.mu.Lock()
+	defer ipt.mu.Unlock()
+
+	status, err := ipt.iptables.Exists(table, chain, rulespec...)
+	if err != nil {
+		log.Errorf("Check rule in chain %s failed: %v", chain, err)
+		return status, err
+	}
+	return status, nil
+}

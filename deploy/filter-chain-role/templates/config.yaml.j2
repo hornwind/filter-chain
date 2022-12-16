@@ -1,0 +1,19 @@
+{{ ansible_managed|comment }}
+
+# Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+refreshInterval: {{ filter_chain_ripe_refresh }}
+
+{% if filter_chain_networks_allow is defined and filter_chain_networks_allow | length > 0 %}
+allowNetworkList:
+{{filter_chain_networks_allow | to_nice_yaml(indent=2)}}
+{% endif %}
+
+{% if filter_chain_countries_allow is defined and filter_chain_countries_allow | length > 0 %}
+countryAllowList:
+{{ filter_chain_countries_allow | to_nice_yaml(indent=2) }}
+{% endif %}
+
+{% if filter_chain_countries_deny is defined and filter_chain_countries_deny | length > 0 %}
+countryDenyList:
+{{ filter_chain_countries_deny | to_nice_yaml(indent=2) }}
+{% endif %}

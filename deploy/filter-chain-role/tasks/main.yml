@@ -1,0 +1,77 @@
+---
+- name: set_facts | Setting Debian Facts
+  set_fact:
+    _filter_chain_systemd_file: /etc/systemd/system/filter-chain.service
+  when: ansible_os_family == "Debian"
+
+- name: debian | Installing ipset
+  apt:
+    name:
+      - ipset
+      - iptables
+      - iptables-persistent
+    state: present
+    cache_valid_time: 1800
+  become: true
+
+- name: create directory
+  file:
+    path: "{{ filter_chain_dir }}"
+    state: directory
+    recurse: true
+    owner: root
+    group: root
+  become: true
+
+- name: download archive
+  get_url:
+    url: "{{ filter_chain_download_url }}"
+    dest: "/tmp"
+    validate_certs: true
+  register: get_url_result
+  until: "'OK' in get_url_result.msg or 'file already exists' in get_url_result.msg"
+  retries: 4
+  delay: 5
+
+- name: extract binary
+  unarchive:
+    src: "{{ get_url_result.dest }}"
+    dest: "{{ filter_chain_dir }}"
+    owner: root
+    group: root
+    mode: "0755"
+    copy: no
+    extra_opts: "filter-chain"
+  become: true
+  notify:
+    - restart filter-chain
+
+- name: configure | generate config
+  template:
+    src: config.yaml.j2
+    dest: "{{ filter_chain_dir }}/config.yaml"
+    owner: root
+    group: root
+  become: true
+  notify:
+    - restart filter-chain
+
+- name: service | creating filter-chain systemd Service
+  template:
+    src: etc/systemd/system/filter-chain.service.j2
+    dest: "{{ _filter_chain_systemd_file }}"
+  become: true
+  notify:
+    - restart filter-chain
+
+- name: service | ensuring filter-chain Service Loads On Reboot
+  service:
+    name: filter-chain
+    state: started
+    enabled: true
+  become: true
+
+- name: Remove archive
+  file:
+    path: "{{ get_url_result.dest }}"
+    state: absent

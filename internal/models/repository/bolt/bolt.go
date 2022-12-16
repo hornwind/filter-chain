@@ -231,7 +231,7 @@ func (s *Storage) GetBoolKV(bucket, key string) (bool, error) {
 		}
 	}
 
-	log.Debugf("%s is %v", key, status)
+	log.Debugf("Bool %s is %v", key, status)
 	return status, nil
 }
 
@@ -270,11 +270,11 @@ func (s *Storage) DeleteBucket(bucket string) error {
 	return nil
 }
 
-func (s *Storage) ListBuckets() (map[string]interface{}, error) {
-	buckets := make(map[string]interface{}, 1)
+func (s *Storage) ListBuckets() (map[string]struct{}, error) {
+	buckets := make(map[string]struct{}, 1)
 	err := s.storage.View(func(tx *bolt.Tx) error {
 		err := tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
-			buckets[string(name)] = nil
+			buckets[string(name)] = struct{}{}
 			return nil
 		})
 		if err != nil {
@@ -289,8 +289,8 @@ func (s *Storage) ListBuckets() (map[string]interface{}, error) {
 	return buckets, nil
 }
 
-func (s *Storage) ListBucketsForDeletion() ([]string, error) {
-	buckets := make([]string, 0, 4)
+func (s *Storage) ListBucketsForDeletion() (map[string]struct{}, error) {
+	buckets := make(map[string]struct{}, 1)
 	err := s.storage.View(func(tx *bolt.Tx) error {
 		err := tx.ForEach(func(name []byte, b *bolt.Bucket) error {
 			data := b.Get([]byte("deletion_mark"))
@@ -302,7 +302,7 @@ func (s *Storage) ListBucketsForDeletion() ([]string, error) {
 					return err
 				}
 				if mark {
-					buckets = append(buckets, string(name))
+					buckets[string(name)] = struct{}{}
 				}
 			}
 			return nil
@@ -398,7 +398,7 @@ func (s *Storage) GetStringKV(bucket, key string) (string, error) {
 		}
 	}
 
-	log.Debugf("%s is %v", key, out)
+	log.Debugf("String KV %s is %v", key, out)
 	return out, nil
 }
 
