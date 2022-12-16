@@ -7,7 +7,7 @@ To solve these problems, there are more powerful (and paid) services and I recom
 - Any modern Linux distro with iptables and ipset support.
 
 ## Installation
-Use the [**ansible**](deploy/filter-chain-role/README.md) (`deploy/filter-chain-role`) for install iptables, ipset and filter-chain.
+Use the [**ansible**](deploy/filter-chain-role) (`deploy/filter-chain-role`) for install iptables, ipset and filter-chain.
 
 ## Configuration
 Example config:
