@@ -23,7 +23,7 @@ Release version for installation
 ```yaml
 filter_chain_networks_allow: []
 ```
-List of allowed subnets.
+List of allowed subnets. E.g. `"127.0.0.0/8"`
 
 
 ```yaml
