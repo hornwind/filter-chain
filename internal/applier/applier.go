@@ -27,7 +27,7 @@ const (
 
 var (
 	netAllowIpsetName = strings.Join([]string{namePrefix, "allow", "networks"}, "-")
-	netAllowRule      = []string{"-m", "set", "--match-set", netAllowIpsetName, "src", "-j", "ACCEPT"}
+	netAllowRule      = []string{"-m", "set", "--match-set", netAllowIpsetName, "src", "-j", "RETURN"}
 )
 
 type Applier struct {
@@ -293,7 +293,7 @@ func (a *Applier) reconcile() error {
 
 	if len(a.config.CountryAllowList) != 0 {
 		for _, i := range a.config.CountryAllowList {
-			if err := countryApplier(i, "ACCEPT"); err != nil {
+			if err := countryApplier(i, "RETURN"); err != nil {
 				log.Error(err)
 				return err
 			}
