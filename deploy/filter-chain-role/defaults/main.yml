@@ -1,8 +1,10 @@
 ---
 filter_chain_arch: amd64
-filter_chain_version: "v0.2.0"
+filter_chain_version: "v0.2.1"
 filter_chain_download_url: "https://github.com/hornwind/filter-chain/releases/download/{{ filter_chain_version }}/filter-chain_{{ filter_chain_version | regex_replace('^v','') }}_linux_{{ filter_chain_arch }}.tar.gz"
 filter_chain_dir: "/var/lib/filter-chain"
+
+filter_chain_drop_at_end: false
 
 # subnets e.g. "127.0.0.0/8"
 filter_chain_networks_allow: []
