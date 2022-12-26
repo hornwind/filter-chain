@@ -9,6 +9,7 @@ type Config struct {
 	CountryAllowList []string `mapstructure:"countryAllowList,omitempty"`
 	CountryDenyList  []string `mapstructure:"countryDenyList,omitempty"`
 	RefreshInterval  string   `mapstructure:"refreshInterval,omitempty"`
+	AppendDrop       bool     `mapstructure:"appendDrop,omitempty"`
 }
 
 // LoadConfig reads configuration from file or environment variables.

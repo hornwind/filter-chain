@@ -1,0 +1,6 @@
+kind: Fixed
+body: creating rules in a idempotent order
+time: 2022-12-26T21:31:24.586163827+03:00
+custom:
+  Author: hornwind
+  Issue: ""
