@@ -27,7 +27,8 @@ const (
 
 var (
 	netAllowIpsetName = strings.Join([]string{namePrefix, "allow", "networks"}, "-")
-	netAllowRule      = []string{"-m", "set", "--match-set", netAllowIpsetName, "src", "-j", "ACCEPT"}
+	netAllowRule      = []string{"-m", "set", "--match-set", netAllowIpsetName, "src", "-j", "RETURN"}
+	lastDropRule      = []string{"-j", "DROP"}
 )
 
 type Applier struct {
@@ -118,6 +119,9 @@ func (a *Applier) runCleanup(ctx context.Context) {
 				log.Warn(err)
 				a.fnCancelRunCTX()
 			}
+			if err := a.cleanupLastDropRule(); err != nil {
+				log.Warn(err)
+			}
 		}
 	}
 }
@@ -204,7 +208,7 @@ func (a *Applier) ipsetCreateOrUpdate(name string, entries []string) error {
 }
 
 func (a *Applier) reconcile() error {
-	pos := 1
+	var pos int
 	var muPos sync.RWMutex
 	type rule struct {
 		bucket string
@@ -212,13 +216,18 @@ func (a *Applier) reconcile() error {
 	}
 	ruleChan := make(chan rule)
 	defer close(ruleChan)
+	waitOK := make(chan struct{})
+	defer close(waitOK)
 
-	go func(data <-chan rule) {
+	go func(data <-chan rule, waitOK chan struct{}) {
 		log.Debug("Start iptables filling goroutine loop")
 		for item := range data {
 			muPos.Lock()
+			pos++
+			log.Debugf("Try to apply rule with pos: %d, table: %s, chain: %s, rulespec: %v", pos, iptTable, iptChain, item.rule)
 			if _, err := a.fw.EnsureRule(pos, iptTable, iptChain, item.rule...); err != nil {
 				log.Errorf("Chain filling goroutime failed: %v", err)
+				waitOK <- struct{}{}
 				return
 			}
 			if item.bucket != "" {
@@ -229,16 +238,17 @@ func (a *Applier) reconcile() error {
 				if err := a.storage.SetBoolKV(item.bucket, "applied", true); err != nil {
 					log.Errorf("Could not set %s applied: %v", item.bucket, err)
 				}
+				waitOK <- struct{}{}
 			}
-			pos++
 			muPos.Unlock()
 		}
-	}(ruleChan)
+	}(ruleChan, waitOK)
 
 	if _, err := a.fw.EnsureChain(iptTable, iptChain, strings.ToUpper(iptChainDefaultPolicy)); err != nil {
 		return err
 	}
 
+	// add allowed networks
 	if len(a.config.AllowNetworkList) > 0 {
 		if err := a.ipsetCreateOrUpdate(netAllowIpsetName, a.config.AllowNetworkList); err != nil {
 			return err
@@ -251,55 +261,63 @@ func (a *Applier) reconcile() error {
 	}
 
 	countryApplier := func(bucket, ruleVerb string) error {
-		if ok, err := a.storage.GetBoolKV(bucket, "applied"); err != nil {
+		ok, err := a.storage.GetBoolKV(bucket, "applied")
+		if err != nil {
 			// if err skip step
 			return err
-		} else {
-			// if applied skip step
-			if ok {
-				muPos.Lock()
-				pos++
-				muPos.Unlock()
-				return nil
-			}
-			// create set if not applied
-			if !ok {
-				ipsetName := strings.Join([]string{namePrefix, bucket}, "-")
-				entries, err := a.storage.GetIpsetResources(bucket)
-				if entries == nil {
-					return fmt.Errorf("receive a nil from db")
-				}
-				if err != nil {
-					log.Warnf("Could not get ipset resource from db: %v", err)
-					return err
-				}
-				if err := a.ipsetCreateOrUpdate(ipsetName, entries.Ipv4); err != nil {
-					log.Warnf("Could not create ipset: %v", err)
-					return err
-				}
-				if err := a.storage.SetStringKV(bucket, "ipset", ipsetName); err != nil {
-					log.Warnf("Could not store ipset name %s to bucket %s: %v", ipsetName, bucket, err)
-					return err
-				}
-				rule := &rule{
-					bucket: bucket,
-					rule:   []string{"-m", "set", "--match-set", ipsetName, "src", "-j", strings.ToUpper(ruleVerb)},
-				}
-				ruleChan <- *rule
-			}
 		}
+		// if applied skip step
+		if ok {
+			muPos.Lock()
+			pos++
+			log.Debugf("countryApplier rule pos: %d, bucket %s", pos, bucket)
+			muPos.Unlock()
+			return nil
+		}
+		// create set if not applied
+		if !ok {
+			muPos.Lock()
+			log.Debugf("countryApplier prepare rule pos: %d, bucket %s", pos+1, bucket)
+			muPos.Unlock()
+			ipsetName := strings.Join([]string{namePrefix, bucket}, "-")
+			entries, err := a.storage.GetIpsetResources(bucket)
+			if entries == nil {
+				return fmt.Errorf("receive a nil from db")
+			}
+			if err != nil {
+				log.Warnf("Could not get ipset resource from db: %v", err)
+				return err
+			}
+			if err := a.ipsetCreateOrUpdate(ipsetName, entries.Ipv4); err != nil {
+				log.Warnf("Could not create ipset: %v", err)
+				return err
+			}
+			if err := a.storage.SetStringKV(bucket, "ipset", ipsetName); err != nil {
+				log.Warnf("Could not store ipset name %s to bucket %s: %v", ipsetName, bucket, err)
+				return err
+			}
+			rule := &rule{
+				bucket: bucket,
+				rule:   []string{"-m", "set", "--match-set", ipsetName, "src", "-j", strings.ToUpper(ruleVerb)},
+			}
+			ruleChan <- *rule
+			<-waitOK
+		}
+
 		return nil
 	}
 
+	// add allow rules
 	if len(a.config.CountryAllowList) != 0 {
 		for _, i := range a.config.CountryAllowList {
-			if err := countryApplier(i, "ACCEPT"); err != nil {
+			if err := countryApplier(i, "RETURN"); err != nil {
 				log.Error(err)
 				return err
 			}
 		}
 	}
 
+	// add deny rules
 	if len(a.config.CountryDenyList) != 0 {
 		for _, i := range a.config.CountryDenyList {
 			if err := countryApplier(i, "DROP"); err != nil {
@@ -307,6 +325,16 @@ func (a *Applier) reconcile() error {
 				return err
 			}
 		}
+	}
+
+	// if `appendDrop` in config is true, create drop rule at last in chain
+	// default false
+	if a.config.AppendDrop {
+		rule := &rule{
+			bucket: "",
+			rule:   lastDropRule,
+		}
+		ruleChan <- *rule
 	}
 
 	return nil
@@ -433,6 +461,19 @@ func (a *Applier) cleanupNetworks() error {
 		}
 	}
 	a.mu.RUnlock()
+	return nil
+}
+
+func (a *Applier) cleanupLastDropRule() error {
+	if len(a.config.AllowNetworkList) > 0 {
+		return nil
+	}
+	if !a.config.AppendDrop {
+		log.Debugf("Delete rule %v", lastDropRule)
+		if err := a.fw.DeleteRule(iptTable, iptChain, lastDropRule...); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
