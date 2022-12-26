@@ -1,6 +1,0 @@
-kind: Fixed
-body: use action `return` instead `accept` in allow rules
-time: 2022-12-24T01:33:51.923669405+03:00
-custom:
-  Author: hornwind
-  Issue: ""
