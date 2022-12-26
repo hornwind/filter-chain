@@ -53,6 +53,7 @@
     owner: root
     group: root
   become: true
+  tags: filter_chain_only_config
   notify:
     - restart filter-chain
 

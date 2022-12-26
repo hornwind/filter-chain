@@ -43,6 +43,11 @@ filter_chain_ripe_refresh: "12h"
 ```
 Time interval between country data received from RIPE. It does not make much sense to set it less than 12 hours.
 
+```yaml
+filter_chain_drop_at_end: false
+```
+Boolean. If true, adds drop (`-j DROP`) rule at the end of chain.
+
 ## Dependencies
 None
 

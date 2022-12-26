@@ -1,5 +1,9 @@
 {{ ansible_managed|comment }}
 
+{% if filter_chain_drop_at_end is defined and filter_chain_drop_at_end %}
+appendDrop: true
+{% endif %}
+
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 refreshInterval: {{ filter_chain_ripe_refresh }}
 
